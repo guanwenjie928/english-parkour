@@ -4,6 +4,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { GameScene } from './scenes/GameScene';
 import { ShmupScene } from './scenes/ShmupScene';
+import { ShmupLobbyScene } from './scenes/ShmupLobbyScene';
 import { TeacherScene } from './scenes/TeacherScene';
 import { ResultScene } from './scenes/ResultScene';
 import { ConnectionManager } from './utils/ConnectionManager.js';
@@ -12,6 +13,7 @@ import { OfflineDetector } from './utils/OfflineDetector.js';
 import { SoundGenerator } from './utils/SoundGenerator.js';
 import { LocalGameEngine } from './engine/LocalGameEngine.js';
 import { ShmupEngine } from './engine/ShmupEngine.js';
+import { NetworkShmupEngine } from './engine/NetworkShmupEngine.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -23,7 +25,7 @@ const config = {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, MenuScene, LobbyScene, GameScene, ShmupScene, TeacherScene, ResultScene],
+  scene: [BootScene, MenuScene, LobbyScene, GameScene, ShmupScene, ShmupLobbyScene, TeacherScene, ResultScene],
   physics: {
     default: 'arcade',
     arcade: { gravity: { y: 800 } },
@@ -193,15 +195,30 @@ class NetworkManager {
   }
 }
 
-// === 本地模式检测 ===
-const isLocalMode = typeof io === 'undefined' || typeof io !== 'function' || location.search.includes('local=1');
+// === 模式检测 ===
+// local=1 → 强制本地模式；mode=race → 旧跑酷模式；默认 → 打字射击
+const urlParams = new URLSearchParams(location.search);
+const isLocalMode = typeof io === 'undefined' || urlParams.get('local') === '1';
+const isRaceMode = urlParams.get('mode') === 'race';
 
 if (isLocalMode) {
-  window.network = new ShmupEngine();
-  console.log('[ShmupEngine] 本地弹幕模式已启动');
+  // 本地模式 — ShmupEngine（打字射击）或 LocalGameEngine（旧跑酷）
+  if (isRaceMode) {
+    window.network = new LocalGameEngine();
+    console.log('[LocalGameEngine] 本地跑酷模式已启动');
+  } else {
+    window.network = new ShmupEngine();
+    console.log('[ShmupEngine] 本地弹幕模式已启动');
+  }
 } else {
-  window.network = new NetworkManager();
-  console.log('[NetworkManager] 联网模式已启动');
+  // 联网模式 — NetworkShmupEngine（打字射击）或 NetworkManager（旧跑酷）
+  if (isRaceMode) {
+    window.network = new NetworkManager();
+    console.log('[NetworkManager] 联网跑酷模式已启动');
+  } else {
+    window.network = new NetworkShmupEngine();
+    console.log('[NetworkShmupEngine] 联网弹幕模式已启动');
+  }
 }
 
 // 多标签页冲突检测（联网模式才启用）

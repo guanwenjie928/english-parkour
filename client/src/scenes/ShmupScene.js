@@ -108,10 +108,17 @@ export class ShmupScene extends Phaser.Scene {
     this.inputText = '';
     this.comboCount = 0;
     this.gameStarted = false;
+    // 多人模式
+    this.isMultiplayer = false;
+    this.gameMode = 'coop';
+    this.otherPlayers = new Map();  // socketId → { gfx, nameText, hpText }
+    this.leaderboardItems = [];
   }
 
   init(data) {
     this.roomCode = data?.code || 'SOLO';
+    this.isMultiplayer = data?.isMultiplayer || false;
+    this.gameMode = data?.mode || 'coop';
   }
 
   create() {
@@ -141,7 +148,11 @@ export class ShmupScene extends Phaser.Scene {
     this._setupListeners(w, h);
     // 11. 键盘
     this._setupKeyboard();
-    // 12. 循环
+    // 12. 多人排行榜（竞技模式）
+    if (this.isMultiplayer && this.gameMode === 'competitive') {
+      this._createLeaderboard(w, h);
+    }
+    // 13. 循环
     this.time.addEvent({ delay: 16, callback: this._updateLoop, callbackScope: this, loop: true });
 
     window.network.start();
@@ -575,12 +586,30 @@ export class ShmupScene extends Phaser.Scene {
         this.comboText.setAlpha(0);
       }
       this.comboCount = d.combo;
+      // 多人：更新其他玩家渲染 + 排行榜
+      if (this.isMultiplayer) {
+        this._updateOtherPlayers(w, h);
+        if (this.gameMode === 'competitive') this._updateLeaderboard();
+      }
     });
     engine.on('answer_result', (d) => {
       d.correct ? this._onCorrect(d, w, h) : this._onWrong(w, h);
+      // 多人：更新排行榜
+      if (this.isMultiplayer && this.gameMode === 'competitive') {
+        this._updateLeaderboard();
+      }
     });
     engine.on('enemy_hit_player', (d) => this._onEnemyHit(d, w, h));
     engine.on('game_end', (d) => this._onGameEnd(d, w, h));
+
+    // 多人：其他玩家事件
+    if (this.isMultiplayer) {
+      engine.on('player_joined', (d) => this._updateOtherPlayers(w, h));
+      engine.on('player_left', (d) => this._updateOtherPlayers(w, h));
+      engine.on('player_ready', (d) => this._updateOtherPlayers(w, h));
+      engine.on('player_offline', (d) => this._updateOtherPlayers(w, h));
+      engine.on('player_reconnected', (d) => this._updateOtherPlayers(w, h));
+    }
   }
 
   // ================================================================
@@ -1050,9 +1079,17 @@ export class ShmupScene extends Phaser.Scene {
     const { width: w, height: h } = this.scale;
     const barH = 52;
     const barY = h - barH;
-    const color = result.correct ? SDV.CORRECT : (result.ok ? SDV.WRONG : 0xffffff);
+    // pending 表示乐观预测（联网模式），仍显示对应颜色
+    const isCorrect = result.correct;
+    const isOk = result.ok;
+    const color = isCorrect ? SDV.CORRECT : (isOk ? SDV.WRONG : 0xffffff);
     const flash = this.add.rectangle(w / 2, barY + barH / 2, w, barH, color, 0.12).setDepth(199);
     this.tweens.add({ targets: flash, alpha: 0, duration: 250, onComplete: () => flash.destroy() });
+
+    // 联网模式：乐观命中立即显示魔法弹效果
+    if (result.pending && result.correct && result.enemy) {
+      this._onCorrect({ correct: true, enemy: result.enemy, combo: this.comboCount + 1 }, w, h);
+    }
   }
 
   // ================================================================
@@ -1083,6 +1120,166 @@ export class ShmupScene extends Phaser.Scene {
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${m}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  // ================================================================
+  //  多人 — 其他玩家渲染
+  // ================================================================
+  _updateOtherPlayers(w, h) {
+    const engine = window.network;
+    const players = engine.players || [];
+    const myId = engine.playerId || engine.socket?.id;
+
+    // 清理离线的其他玩家
+    const activeIds = new Set(players.map((p) => p.socketId));
+    for (const [id, data] of this.otherPlayers) {
+      if (!activeIds.has(id)) {
+        data.gfx.destroy();
+        data.nameText.destroy();
+        if (data.hpText) data.hpText.destroy();
+        this.otherPlayers.delete(id);
+      }
+    }
+
+    // 更新/创建其他玩家精灵
+    players.forEach((p, i) => {
+      if (p.socketId === myId) return; // 跳过自己
+      if (!p.isOnline) return;         // 跳过离线
+
+      let entry = this.otherPlayers.get(p.socketId);
+      if (!entry) {
+        // 创建其他玩家精灵（小型法师）
+        const offsetX = (i % 2 === 0 ? -1 : 1) * (30 + (Math.floor(i / 2) * 25));
+        const ox = this.mageX + offsetX;
+        const oy = this.mageY + (i % 3 - 1) * 15;
+        const s = Math.max(2, this._mageScale * 0.65);
+
+        const gfx = this.add.graphics().setDepth(19);
+        const nameText = this.add.text(ox, oy - s * 9, p.name, {
+          fontSize: `${Math.max(9, s * 2.2)}px`,
+          fontFamily: 'Nunito',
+          fontStyle: '700',
+          color: '#f5e6c8',
+          stroke: '#2a1a08',
+          strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(20);
+
+        const hpText = this.gameMode === 'competitive' ? this.add.text(ox, oy + s * 7, `HP:${p.hp}`, {
+          fontSize: `${Math.max(8, s * 1.6)}px`,
+          fontFamily: 'Nunito',
+          fontStyle: '700',
+          color: '#ff6060',
+        }).setOrigin(0.5).setDepth(20) : null;
+
+        entry = { gfx, nameText, hpText, baseX: ox, baseY: oy, scale: s };
+        this.otherPlayers.set(p.socketId, entry);
+      }
+
+      // 更新位置和绘制
+      entry.nameText.setText(p.name);
+      entry.nameText.setColor(p.isOnline === false ? '#806050' : '#f5e6c8');
+      if (entry.hpText) entry.hpText.setText(`HP:${p.hp}`);
+
+      // 绘制小型法师
+      entry.gfx.clear();
+      this._drawMiniMage(entry.gfx, entry.baseX, entry.baseY, entry.scale, p.isOnline !== false ? 1 : 0.4);
+    });
+  }
+
+  // 小型法师（用于其他玩家）
+  _drawMiniMage(gfx, ox, oy, s, alpha) {
+    // 影子
+    gfx.fillStyle(0x000000, 0.15 * alpha);
+    gfx.fillEllipse(ox, oy + s * 6, s * 7, s * 1.5);
+
+    // 袍子
+    for (const [dx, dy] of MAGE_MAP.robe) {
+      gfx.fillStyle(SDV.MAGE_ROBE, alpha);
+      gfx.fillRect(ox + dx * s, oy + dy * s, s - 0.5, s - 0.5);
+    }
+    // 脸
+    for (const [dx, dy] of MAGE_MAP.face) {
+      gfx.fillStyle(SDV.MAGE_SKIN, alpha);
+      gfx.fillRect(ox + dx * s, oy + dy * s, s - 0.5, s - 0.5);
+    }
+    // 帽子
+    for (const [dx, dy] of MAGE_MAP.hat) {
+      gfx.fillStyle(SDV.MAGE_HAT, alpha);
+      gfx.fillRect(ox + dx * s, oy + dy * s, s - 0.5, s - 0.5);
+    }
+    // 法杖
+    gfx.fillStyle(SDV.STAFF_WOOD, alpha);
+    gfx.fillRect(ox + s * 4, oy - s * 2, s * 0.7, s * 7);
+    gfx.fillStyle(SDV.STAFF_ORB, alpha);
+    gfx.fillRect(ox + s * 4, oy - s * 3, s * 0.8, s * 0.8);
+  }
+
+  // ================================================================
+  //  多人 — 竞技排行榜
+  // ================================================================
+  _createLeaderboard(w, h) {
+    const panelW = 130, panelH = 210;
+    const px = w - panelW - 8;
+    const py = h * 0.16;
+
+    this.lbGfx = this.add.graphics().setDepth(200);
+    this.lbGfx.fillStyle(0x000000, 0.45);
+    this.lbGfx.fillRoundedRect(px, py, panelW, panelH, 5);
+    this.lbGfx.lineStyle(1.5, 0x9a6a38, 0.6);
+    this.lbGfx.strokeRoundedRect(px, py, panelW, panelH, 5);
+
+    this.add.text(px + panelW / 2, py + 10, 'RANKING', {
+      fontSize: '10px', fontFamily: 'Nunito', fontStyle: '800', color: '#ffc840',
+    }).setOrigin(0.5).setDepth(201);
+
+    this.lbItems = [];
+    for (let i = 0; i < 8; i++) {
+      const iy = py + 28 + i * 22;
+      const rankText = this.add.text(px + 8, iy, `${i + 1}.`, {
+        fontSize: '10px', fontFamily: 'Nunito', fontStyle: '700', color: '#b0a080',
+      }).setDepth(201);
+      const nameText = this.add.text(px + 24, iy, '-', {
+        fontSize: '10px', fontFamily: 'Nunito', fontStyle: '600', color: '#d0c8b0',
+      }).setDepth(201);
+      const scoreText = this.add.text(px + panelW - 8, iy, '', {
+        fontSize: '10px', fontFamily: 'Nunito', fontStyle: '700', color: '#ffc840',
+      }).setOrigin(1, 0).setDepth(201);
+      this.lbItems.push({ rankText, nameText, scoreText });
+    }
+  }
+
+  _updateLeaderboard() {
+    if (!this.lbItems) return;
+    const engine = window.network;
+    const players = (engine.players || []).slice();
+
+    // 按分数降序
+    players.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    this.lbItems.forEach((item, i) => {
+      const p = players[i];
+      if (p) {
+        item.rankText.setText(`${i + 1}.`);
+        item.nameText.setText(p.name.length > 6 ? p.name.slice(0, 5) + '..' : p.name);
+        item.nameText.setColor(p.isOnline === false ? '#604030' : '#d0c8b0');
+        item.scoreText.setText(String(p.score || 0));
+
+        // 高亮自己
+        const myId = engine.playerId || engine.socket?.id;
+        if (p.socketId === myId) {
+          item.rankText.setColor('#5acc40');
+          item.nameText.setColor('#5acc40');
+          item.scoreText.setColor('#5acc40');
+        } else {
+          item.rankText.setColor('#b0a080');
+        }
+      } else {
+        item.rankText.setText(`${i + 1}.`);
+        item.nameText.setText('-');
+        item.nameText.setColor('#605040');
+        item.scoreText.setText('');
+      }
+    });
   }
 
   shutdown() {

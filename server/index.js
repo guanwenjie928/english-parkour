@@ -10,6 +10,7 @@ const { Logger } = require('./src/core/Logger');
 const { setupErrorBoundary } = require('./src/core/ErrorBoundary');
 const { registerShutdownHandlers } = require('./src/core/GracefulShutdown');
 const { setupGameSocket } = require('./src/socket/gameSocket');
+const { setupShmupSocket } = require('./src/socket/shmupSocket');
 const apiRoutes = require('./src/routes/api');
 const { WordEngine } = require('./src/game/WordEngine');
 
@@ -51,8 +52,9 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 // 错误兜底
 const { safeHandler } = setupErrorBoundary(app, io, rooms);
 
-// WebSocket 设置
+// WebSocket 设置 — 支持跑酷（旧）和射击（新）两种模式
 setupGameSocket(io, rooms, wordEngine);
+setupShmupSocket(io, rooms, wordEngine);
 
 // 房间回收定时器（30分钟 TTL）
 const ROOM_TTL = 30 * 60 * 1000;

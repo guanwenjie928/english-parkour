@@ -219,7 +219,7 @@ export class MenuScene extends Phaser.Scene {
 
     makeBtn(cx, startY, 260, 46, 'START GAME', SDV.PRIMARY, () => this._handleQuickStart());
     makeBtn(cx, startY + 60, 220, 38, 'JOIN ROOM', SDV.GOLD, () => this._openRoomInput(), '#3a2010');
-    makeBtn(cx, startY + 106, 180, 32, 'TEACHER', SDV.PANEL_BORDER, () => this._openRoomInput(true), '#f5e6c8');
+    makeBtn(cx, startY + 106, 180, 32, 'CREATE ROOM', SDV.PANEL_BORDER, () => this._handleCreateRoom(), '#f5e6c8');
   }
 
   // === 输入模态框 ===
@@ -277,7 +277,7 @@ export class MenuScene extends Phaser.Scene {
       if (this.inputMode === 'name') {
         if (/^[a-zA-Z0-9\u4e00-\u9fa5]$/.test(char) && this.playerName.length < 8) this.playerName += char;
       } else if (this.inputMode === 'room') {
-        if (/^[0-9]$/.test(char) && this.roomCode.length < 6) this.roomCode += char;
+        if (/^[a-zA-Z0-9]$/.test(char) && this.roomCode.length < 4) this.roomCode += char.toUpperCase();
       }
       this._updateInputDisplay();
     });
@@ -289,10 +289,9 @@ export class MenuScene extends Phaser.Scene {
     this._showModal('YOUR NAME', this.playerName);
   }
 
-  _openRoomInput(isTeacher = false) {
+  _openRoomInput() {
     this.inputMode = 'room';
-    this.isTeacherMode = isTeacher;
-    this._showModal(isTeacher ? 'ROOM CODE (TEACHER)' : 'ROOM CODE (6 DIGITS)', this.roomCode);
+    this._showModal('ROOM CODE (4 位字母/数字)', this.roomCode);
   }
 
   _showModal(title, value) {
@@ -315,7 +314,15 @@ export class MenuScene extends Phaser.Scene {
   }
 
   _confirmInput() {
-    if (this.inputMode === 'name') this.playerName = this.playerName.trim() || '玩家';
+    if (this.inputMode === 'name') {
+      this.playerName = this.playerName.trim() || '玩家';
+    } else if (this.inputMode === 'room') {
+      const code = this.roomCode.trim();
+      if (code.length < 4) { this._showError('请输入4位房间码'); return; }
+      this._closeInput();
+      this._handleJoinRoom();
+      return;
+    }
     this.nameDisplayText.setText(this.playerName);
     this._closeInput();
   }
@@ -332,8 +339,25 @@ export class MenuScene extends Phaser.Scene {
 
   _handleQuickStart() {
     const name = this.playerName.trim() || '玩家';
-    this.scene.start('ShmupScene', { code: 'SOLO', name, isTeacher: false, isLocal: true });
-    window.network.joinRoom?.('SOLO', name, false);
+    localStorage.setItem('playerName', name);
+    this.scene.start('ShmupScene', { code: 'SOLO', name, isMultiplayer: false });
+  }
+
+  _handleJoinRoom() {
+    const code = this.roomCode.trim();
+    if (code.length < 4) {
+      this._showError('请输入房间号');
+      return;
+    }
+    const name = this.playerName.trim() || '玩家';
+    localStorage.setItem('playerName', name);
+    this.scene.start('ShmupLobbyScene', { flow: 'join', code, name });
+  }
+
+  _handleCreateRoom() {
+    const name = this.playerName.trim() || '老师';
+    localStorage.setItem('playerName', name);
+    this.scene.start('ShmupLobbyScene', { flow: 'create', name });
   }
 
   async _checkDupTab() {
