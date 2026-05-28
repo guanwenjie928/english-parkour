@@ -169,13 +169,8 @@ class GameRoom {
   tick() {
     this.elapsed = Date.now() - this.startedAt;
 
-    // 更新玩家位置
-    this.players.forEach((player) => {
-      if (player.effects.paralyzed || player.status === 'stunned') return;
-      const speedMultiplier = player.effects.slow ? 0.15 : 1;
-      player.progress += (player.speed * speedMultiplier * GameRoom.TICK_RATE) / 1000;
-      if (player.progress > 100) player.progress = 100;
-    });
+    // 拼写驱动前进：玩家不再自动前进，完全依赖答题驱动 progress
+    // 仅同步位置和检查终点
 
     // 广播位置同步
     this.syncPositions();
@@ -232,30 +227,53 @@ class GameRoom {
       return { ok: false, reason: 'no_challenge' };
     }
 
+    // 错误冷却期内不允许提交
+    if (player._answerCooldown) return { ok: false, reason: 'cooldown' };
+
     const { correct } = this.wordEngine.validateAnswer(player.currentChallenge, answer);
 
     // 更新状态
     if (correct) {
       player.consecutiveCorrect++;
       player.correctCount++;
-      player.speed = Math.min(player.speed + 0.5, 5); // 上限 5
+
+      // 拼写驱动前进：答对前进 7%（约 14 题到终点，90 秒内合理）
+      const ADVANCE_PER_WORD = 7;
+      player.progress = Math.min(player.progress + ADVANCE_PER_WORD, 100);
+
+      // 连续答对轻微加速（影响后续 match 的答题间隔）
+      player.speed = Math.min(player.speed + 0.3, 5);
+
+      // 清除负面效果
+      if (player.effects.paralyzed && player.consecutiveCorrect >= 2) {
+        delete player.effects.paralyzed;
+      }
+      if (player.effects.slow && player.consecutiveCorrect >= 1) {
+        delete player.effects.slow;
+      }
+
       player.currentChallenge = null;
 
       // 检查道具奖励
       const reward = this.checkItemReward(player);
 
-      // 追赶机制: 落后 30% 以上时，答对获得额外 20% 速度
+      // 追赶机制: 落后 30% 以上时，答对获得额外加成
       if (this.isCatchUp(player)) {
-        player.speed += 0.2;
+        player.progress = Math.min(player.progress + 2, 100); // 额外前进 2%
       }
 
-      return { ok: true, correct, newSpeed: player.speed, reward };
+      return { ok: true, correct, newSpeed: player.speed, progress: player.progress, reward };
     } else {
       player.consecutiveCorrect = 0;
       player.wrongCount++;
-      player.speed = Math.max(player.speed - 0.3, 0.5); // 下限 0.5
+      player.speed = Math.max(player.speed - 0.3, 0.5);
+
+      // 错误冷却：1.5s 内无法答题
+      player._answerCooldown = true;
+      setTimeout(() => { player._answerCooldown = false; }, 1500);
+
       player.currentChallenge = null;
-      return { ok: true, correct, newSpeed: player.speed };
+      return { ok: true, correct, newSpeed: player.speed, progress: player.progress };
     }
   }
 

@@ -217,6 +217,9 @@ class LocalGameEngine {
     const player = this.room.players.get(this.playerId);
     if (!player?.currentChallenge) return { ok: false };
 
+    // 错误冷却期内不允许提交
+    if (player._answerCooldown) return { ok: false, reason: 'cooldown' };
+
     const challenge = player.currentChallenge;
     const result = this.wordBank.validateAnswer(challenge, answer);
 
@@ -224,7 +227,13 @@ class LocalGameEngine {
     if (result.correct) {
       player.consecutiveCorrect++;
       player.correctCount++;
-      player.speed = Math.min(player.speed + 0.5, 5);
+
+      // 拼写驱动前进：答对前进 7%（约 14 题到终点，90 秒内合理）
+      const ADVANCE_PER_WORD = 7;
+      player.progress = Math.min(player.progress + ADVANCE_PER_WORD, 100);
+
+      // 连续答对轻微加速（影响后续 match 的答题间隔）
+      player.speed = Math.min(player.speed + 0.3, 5);
 
       // 清除负面效果
       if (player.effects.paralyzed && player.consecutiveCorrect >= 2) {
@@ -236,12 +245,17 @@ class LocalGameEngine {
 
       // 道具奖励
       const reward = this._checkItemReward(player);
-      this.emit('answer_result', { correct: true, newSpeed: player.speed, reward });
+      this.emit('answer_result', { correct: true, newSpeed: player.speed, progress: player.progress, reward });
     } else {
       player.consecutiveCorrect = 0;
       player.wrongCount++;
       player.speed = Math.max(player.speed - 0.3, 0.5);
-      this.emit('answer_result', { correct: false, newSpeed: player.speed });
+
+      // 错误冷却：1.5s 内无法答题
+      player._answerCooldown = true;
+      setTimeout(() => { player._answerCooldown = false; }, 1500);
+
+      this.emit('answer_result', { correct: false, newSpeed: player.speed, progress: player.progress });
     }
 
     // 清除当前题目，允许发送下一题
@@ -410,12 +424,11 @@ class LocalGameEngine {
     // 更新所有玩家位置
     this.room.players.forEach((player) => {
       if (player.isHuman) {
-        // 真人玩家：检查效果
-        if (player.effects.paralyzed) return;
-        const speedMultiplier = player.effects.slow ? 0.15 : 1;
-        player.progress += (player.speed * speedMultiplier * 50) / 1000;
+        // 真人玩家：不再自动前进，完全依赖答题驱动
+        // progress 只在 submitAnswer() 的正确答案中累加
+        return;
       } else {
-        // AI：tick 更新
+        // AI：tick 更新（保持自动跑作为对手基准线）
         player.tick(50);
       }
       if (player.progress > 100) player.progress = 100;

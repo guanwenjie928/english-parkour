@@ -38,11 +38,22 @@ export class MenuScene extends Phaser.Scene {
   createBackground() {
     const { width, height } = this.scale;
 
-    // 天空渐变色条
+    // 优先使用 menu-bg 素材图
+    if (this.textures.exists('menu-bg')) {
+      const bg = this.add.image(width / 2, height / 2, 'menu-bg');
+      // 按比例缩放填满屏幕
+      const tex = this.textures.get('menu-bg').source[0];
+      const scaleX = width / tex.width;
+      const scaleY = height / tex.height;
+      const scale = Math.max(scaleX, scaleY);
+      bg.setScale(scale).setDepth(0).setAlpha(0.55);
+    }
+
+    // 天空渐变色条（叠加在背景图上）
     const skyColors = [C.ACCENT, 0xb8e0e0, 0xcdd8c8, 0xdde8d0, C.BG_CREAM];
     const bandH = Math.ceil(height / skyColors.length);
     skyColors.forEach((color, i) => {
-      this.add.rectangle(width / 2, i * bandH + bandH / 2, width, bandH + 1, color, 0.55);
+      this.add.rectangle(width / 2, i * bandH + bandH / 2, width, bandH + 1, color, 0.15);
     });
 
     // 底部草地
@@ -60,8 +71,9 @@ export class MenuScene extends Phaser.Scene {
     const { width } = this.scale;
 
     if (this.textures.exists('menu-logo')) {
-      const logo = this.add.image(width / 2, 100, 'menu-logo');
-      logo.setScale(0.65).setDepth(2);
+      // 素材 Logo，居中偏上，放大到更显眼的尺寸
+      const logo = this.add.image(width / 2, 75, 'menu-logo');
+      logo.setScale(0.8).setDepth(2);
       popIn(this, logo, 600);
     } else {
       // Fallback: 治愈风文字 Logo
@@ -86,40 +98,46 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     if (this.textures.exists('menu-character')) {
-      const leftChar = this.add.image(110, height * 0.52, 'menu-character');
-      leftChar.setScale(0.4).setDepth(1).setAlpha(0.75);
+      // 单主视觉角色立绘，居中放大
+      const char = this.add.image(width / 2, height * 0.42, 'menu-character');
+      char.setScale(0.7).setDepth(1).setAlpha(0.85);
 
-      const rightChar = this.add.image(width - 110, height * 0.52, 'menu-character');
-      rightChar.setScale(0.4).setFlipX(true).setDepth(1).setAlpha(0.75);
+      // 柔和呼吸动画
+      this.tweens.add({
+        targets: char,
+        scaleX: 0.73,
+        scaleY: 0.73,
+        duration: 3500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
 
-      // 呼吸动画
-      [leftChar, rightChar].forEach((char) => {
-        this.tweens.add({
-          targets: char,
-          scaleX: 0.42,
-          scaleY: 0.42,
-          duration: 3000,
-          yoyo: true,
-          repeat: -1,
-          ease: EASE.SMOOTH,
-        });
+      // 角色轻微浮动
+      this.tweens.add({
+        targets: char,
+        y: char.y - 6,
+        duration: 4000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
       });
     }
   }
 
   createPanel() {
     const { width, height } = this.scale;
-    const panelW = 400;
-    const panelH = 130;
+    const panelW = 380;
+    const panelH = 110;
     const px = (width - panelW) / 2;
-    const py = height * 0.30;
+    const py = height * 0.56;
 
     // 毛玻璃面板
     this.panelGfx = this.add.graphics().setDepth(2);
     drawGlassPanel(this.panelGfx, px, py, panelW, panelH, 12, C.BG_CREAM, 0.88, C.ACCENT, 2);
 
     // 标签
-    this.nameLabel = this.add.text(width / 2, py + 22, '你的名字', {
+    this.nameLabel = this.add.text(width / 2, py + 18, '你的名字', {
       fontSize: '12px',
       fontFamily: FONT_CN,
       color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
@@ -127,9 +145,9 @@ export class MenuScene extends Phaser.Scene {
 
     // 名字显示区域
     const nameW = panelW - 60;
-    const nameH = 44;
+    const nameH = 40;
     const nameX = (width - nameW) / 2;
-    const nameY = py + 55;
+    const nameY = py + 48;
 
     const nameBg = this.add.graphics().setDepth(3);
     nameBg.fillStyle(C.BG_SAND, 0.9);
@@ -182,7 +200,7 @@ export class MenuScene extends Phaser.Scene {
   createButtons() {
     const { width, height } = this.scale;
     const cx = width / 2;
-    const startY = height * 0.52;
+    const startY = height * 0.71;
 
     // 快速开始 — 主按钮
     createSoftButton(this, cx, startY, 280, 50, '快 速 开 始', C.PRIMARY,

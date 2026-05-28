@@ -21,6 +21,7 @@ export class BootScene extends Phaser.Scene {
     // 仅加载菜单必需的素材
     this.load.image('menu-logo', 'assets/ui/menu-logo.jpg');
     this.load.image('menu-character', 'assets/ui/menu-character.png');
+    this.load.image('menu-bg', 'assets/ui/menu-bg.jpg');
   }
 
   _createLoadingUI(width, height) {

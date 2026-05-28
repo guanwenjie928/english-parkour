@@ -219,11 +219,12 @@ export class GameScene extends Phaser.Scene {
       color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
     }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(101);
 
-    // --- 迷你进度条（header 下方） ---
+    // --- 迷你进度条（header 下方，响应式）---
     const barY = headerY + headerH / 2 + 8;
-    const barW = viewW - 180;
-    const barX = 80;
-    const barH = 5;
+    const barMargin = viewW * 0.09;
+    const barW = viewW - barMargin * 2;
+    const barX = barMargin;
+    const barH = Math.max(4, viewH * 0.006);
 
     const barBgGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
     barBgGfx.fillStyle(C.BG_SAND, 0.6);
@@ -245,10 +246,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   createItemPanel(viewW, viewH) {
-    const panelX = viewW - 150;
-    const panelY = viewH - 105;
-    const panelW = 130;
-    const panelH = 85;
+    // 响应式布局：面板大小基于屏幕尺寸比例
+    const minDim = Math.min(viewW, viewH);
+    const panelW = Math.max(100, viewW * 0.16);
+    const panelH = Math.max(70, minDim * 0.14);
+    const margin = viewW * 0.02;
+    const panelX = viewW - panelW - margin;
+    const panelY = viewH - panelH - margin;
 
     const panelGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
     panelGfx.fillStyle(C.BG_CREAM, 0.85);
@@ -256,33 +260,43 @@ export class GameScene extends Phaser.Scene {
     panelGfx.lineStyle(1, C.ACCENT, 0.3);
     panelGfx.strokeRoundedRect(panelX, panelY, panelW, panelH, 10);
 
-    this.add.text(panelX + panelW / 2, panelY + 12, 'ITEMS', {
-      fontSize: '9px',
+    const labelSize = Math.max(8, minDim * 0.015);
+    this.add.text(panelX + panelW / 2, panelY + panelH * 0.18, 'ITEMS', {
+      fontSize: `${labelSize}px`,
       fontFamily: FONT,
       fontStyle: '600',
       color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
     }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
 
+    // 道具槽位尺寸和间距基于面板大小
+    const slotSize = Math.max(36, panelW * 0.35);
+    const slotGap = panelW * 0.08;
+    const totalSlotsW = 2 * slotSize + slotGap;
+    const slotsStartX = panelX + (panelW - totalSlotsW) / 2;
+    const slotsY = panelY + panelH * 0.62;
+
     this.itemSlots = [];
     for (let i = 0; i < 2; i++) {
-      const sx = panelX + 22 + i * 60;
-      const sy = panelY + 48;
+      const sx = slotsStartX + slotSize / 2 + i * (slotSize + slotGap);
+      const sy = slotsY;
 
       const slotGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
       slotGfx.fillStyle(C.BG_SAND, 0.7);
-      slotGfx.fillRoundedRect(sx - 24, sy - 24, 48, 48, 8);
+      slotGfx.fillRoundedRect(sx - slotSize / 2, sy - slotSize / 2, slotSize, slotSize, 8);
       slotGfx.lineStyle(1, C.ACCENT, 0.4);
-      slotGfx.strokeRoundedRect(sx - 24, sy - 24, 48, 48, 8);
+      slotGfx.strokeRoundedRect(sx - slotSize / 2, sy - slotSize / 2, slotSize, slotSize, 8);
 
-      const slotHit = this.add.rectangle(sx, sy, 48, 48, 0x000000, 0)
+      const slotHit = this.add.rectangle(sx, sy, slotSize, slotSize, 0x000000, 0)
         .setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(102);
 
+      // 图标缩放基于槽位大小（items-strip 原始帧约 464px）
+      const iconScale = slotSize / 464;
       const icon = this.add.image(sx, sy, 'items-strip')
-        .setVisible(false).setScrollFactor(0).setDepth(101).setScale(0.1);
+        .setVisible(false).setScrollFactor(0).setDepth(101).setScale(iconScale);
 
       slotHit.on('pointerdown', () => this.useItem(i));
 
-      this.itemSlots.push({ slotGfx, icon, itemType: null, hitArea: slotHit });
+      this.itemSlots.push({ slotGfx, icon, itemType: null, hitArea: slotHit, iconScale });
     }
   }
 
@@ -465,15 +479,15 @@ export class GameScene extends Phaser.Scene {
       this.blankText.setText(data.display);
     }
 
-    // 键盘容器入场动画
+    // 键盘容器从底部滑入（不暂停游戏！）
     this.keyboardContainer.setVisible(true);
     this.keyboardContainer.setAlpha(0);
-    this.keyboardContainer.y = 30;
+    this.keyboardContainer.y = 200; // 从底部下方开始
     this.tweens.add({
       targets: this.keyboardContainer,
       alpha: 1,
       y: 0,
-      duration: 300,
+      duration: 350,
       ease: 'Back.easeOut',
     });
 
@@ -501,7 +515,7 @@ export class GameScene extends Phaser.Scene {
       repeat: 9,
     });
 
-    this.isPaused = true;
+    // 游戏不暂停！玩家可以边看比赛边拼写
   }
 
   handleKeyInput(key) {
@@ -520,8 +534,15 @@ export class GameScene extends Phaser.Scene {
 
   submitAnswer() {
     if (this.timerEvent) this.timerEvent.remove();
-    this.keyboardContainer.setVisible(false);
-    this.isPaused = false;
+    // 面板向下滑出
+    this.tweens.add({
+      targets: this.keyboardContainer,
+      alpha: 0,
+      y: 200,
+      duration: 250,
+      ease: 'Cubic.easeIn',
+      onComplete: () => this.keyboardContainer.setVisible(false),
+    });
     this.answerTimerBar.setFillStyle(C.PRIMARY);
 
     window.network.submitAnswer(this.currentInput);
@@ -575,12 +596,13 @@ export class GameScene extends Phaser.Scene {
     }
     this.soundGenerator.play('item_get');
 
-    // 道具弹入动画
+    // 道具弹入动画（使用响应式缩放）
+    const targetScale = emptySlot.iconScale || 0.1;
     emptySlot.icon.setScale(0);
     this.tweens.add({
       targets: emptySlot.icon,
-      scaleX: 1,
-      scaleY: 1,
+      scaleX: targetScale,
+      scaleY: targetScale,
       duration: 300,
       ease: 'Back.easeOut',
     });
@@ -694,7 +716,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ==============================================================
-  //  虚拟键盘（圆角治愈风）
+  //  底部浮动拼写面板（不遮挡游戏画面）
   // ==============================================================
   createVirtualKeyboard(viewW, viewH) {
     const keys = [
@@ -702,75 +724,86 @@ export class GameScene extends Phaser.Scene {
       ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
       ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
     ];
-    const keySize = 52;
-    const gap = 5;
+    // 响应式按键尺寸
+    const minDim = Math.min(viewW, viewH);
+    const keySize = Math.max(34, Math.min(52, minDim * 0.082));
+    const gap = Math.max(3, keySize * 0.09);
+    const fontSize = Math.max(14, keySize * 0.38);
+
+    // 底部面板高度：32% 屏幕高
+    const panelH = viewH * 0.34;
+    const panelY = viewH - panelH;
+    const panelPad = 14;
 
     this.keyboardContainer = this.add.container(0, 0);
     this.keyboardContainer.setVisible(false).setDepth(200).setScrollFactor(0);
 
-    // 浅色遮罩（不再深棕）
-    const mask = this.add.rectangle(viewW / 2, viewH / 2, viewW, viewH, C.BG_CREAM, 0.93);
-    this.keyboardContainer.add(mask);
+    // === 半透明底栏（仅覆盖面板区域，上方游戏可见）===
+    const panelBg = this.add.graphics();
+    panelBg.fillStyle(C.BG_CREAM, 0.95);
+    panelBg.fillRoundedRect(0, panelY - 8, viewW, panelH + 8, 18);
+    panelBg.lineStyle(2, C.ACCENT, 0.35);
+    panelBg.strokeRoundedRect(0, panelY - 8, viewW, panelH + 8, 18);
+    this.keyboardContainer.add(panelBg);
 
-    // 圆角外框
-    const frameGfx = this.add.graphics();
-    frameGfx.fillStyle(C.BG_CREAM, 0.9);
-    frameGfx.fillRoundedRect(30, viewH * 0.04, viewW - 60, viewH * 0.92, 16);
-    frameGfx.lineStyle(2, C.ACCENT, 0.4);
-    frameGfx.strokeRoundedRect(30, viewH * 0.04, viewW - 60, viewH * 0.92, 16);
-    this.keyboardContainer.add(frameGfx);
+    // 顶部拖拽指示条
+    const handleGfx = this.add.graphics();
+    handleGfx.fillStyle(C.ACCENT, 0.4);
+    handleGfx.fillRoundedRect(viewW / 2 - 20, panelY + 4, 40, 3, 2);
+    this.keyboardContainer.add(handleGfx);
 
-    // 题目区域
-    this.wordChallengeContainer = this.add.container(viewW / 2, viewH * 0.19);
+    // === 题目行（面板内顶部）===
+    const questionY = panelY + panelPad + 6;
+    this.wordChallengeContainer = this.add.container(viewW / 2, questionY);
     this.keyboardContainer.add(this.wordChallengeContainer);
 
     // 中文释义
-    this.meaningText = this.add.text(0, -40, '', {
-      fontSize: '18px',
+    this.meaningText = this.add.text(0, 0, '', {
+      fontSize: `${Math.max(13, viewH * 0.022)}px`,
       fontFamily: FONT_CN,
       color: '#' + C.TEXT_WARM.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
     this.wordChallengeContainer.add(this.meaningText);
 
-    // 挖空/拼写
-    this.blankText = this.add.text(0, 5, '', {
-      fontSize: '42px',
+    // 挖空/拼写（下方12px）
+    this.blankText = this.add.text(0, this.meaningText.height / 2 + 10, '', {
+      fontSize: `${Math.max(24, viewH * 0.045)}px`,
       fontFamily: FONT,
       fontStyle: '800',
       color: '#' + C.TEXT_DARK.toString(16).padStart(6, '0'),
-      letterSpacing: 8,
+      letterSpacing: 6,
     }).setOrigin(0.5);
     this.wordChallengeContainer.add(this.blankText);
 
-    // 输入显示
-    this.inputDisplay = this.add.text(0, 55, '', {
-      fontSize: '28px',
+    // 输入显示区域
+    const inputY = this.blankText.y + this.blankText.height / 2 + 12;
+    this.inputDisplay = this.add.text(0, inputY, '', {
+      fontSize: `${Math.max(18, viewH * 0.032)}px`,
       fontFamily: FONT,
       fontStyle: '700',
       color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
-      letterSpacing: 4,
+      letterSpacing: 3,
     }).setOrigin(0.5);
     this.wordChallengeContainer.add(this.inputDisplay);
 
-    // 倒计时条（圆角）
-    const timerY = 105;
-    const timerW = 280;
-    const timerH = 6;
+    // 倒计时条（输入框下方）
+    const timerY = inputY + 18;
+    const timerW = Math.min(280, viewW * 0.5);
+    const timerH = 5;
     const timerBg = this.add.graphics();
     timerBg.fillStyle(C.BG_SAND, 0.6);
     timerBg.fillRoundedRect(-timerW / 2, timerY - timerH / 2, timerW, timerH, 3);
     this.wordChallengeContainer.add(timerBg);
 
     this.answerTimerBar = this.add.rectangle(0, timerY, timerW, timerH, C.PRIMARY);
-    // 圆角 mask
     const timerMaskGfx = this.add.graphics();
     timerMaskGfx.fillStyle(0xffffff);
     timerMaskGfx.fillRoundedRect(-timerW / 2, timerY - timerH / 2, timerW, timerH, 3);
     this.answerTimerBar.setMask(timerMaskGfx.createGeometryMask());
     this.wordChallengeContainer.add(this.answerTimerBar);
 
-    // 键盘行
-    const keyStartY = viewH * 0.42;
+    // === 键盘行（面板内）===
+    const keyStartY = panelY + panelH * 0.38;
     keys.forEach((row, rowIdx) => {
       const rowWidth = row.length * (keySize + gap) - gap;
       const startX = (viewW - rowWidth) / 2;
@@ -779,7 +812,6 @@ export class GameScene extends Phaser.Scene {
         const kx = startX + colIdx * (keySize + gap);
         const ky = keyStartY + rowIdx * (keySize + gap);
 
-        // 圆角按键背景
         const keyBg = this.add.graphics();
         keyBg.fillStyle(C.BG_CREAM, 0.9);
         keyBg.fillRoundedRect(kx, ky, keySize, keySize, 8);
@@ -787,13 +819,12 @@ export class GameScene extends Phaser.Scene {
         keyBg.strokeRoundedRect(kx, ky, keySize, keySize, 8);
 
         const label = this.add.text(kx + keySize / 2, ky + keySize / 2, key, {
-          fontSize: '20px',
+          fontSize: `${fontSize}px`,
           fontFamily: FONT,
           fontStyle: '700',
           color: '#' + C.TEXT_DARK.toString(16).padStart(6, '0'),
         }).setOrigin(0.5);
 
-        // 热区
         const hitArea = this.add.rectangle(kx + keySize / 2, ky + keySize / 2, keySize, keySize, 0x000000, 0)
           .setInteractive({ useHandCursor: true });
 
@@ -832,49 +863,50 @@ export class GameScene extends Phaser.Scene {
       });
     });
 
-    // 控制键
-    const ctrlY = keyStartY + 3 * (keySize + gap) + 8;
+    // === 控制键 ===
+    const ctrlY = keyStartY + 3 * (keySize + gap) + 6;
+    const ctrlH = keySize * 0.85;
 
     // DEL 键
-    const delW = 90;
-    const delX = viewW / 2 - 110;
+    const delW = keySize * 1.8;
+    const delX = viewW / 2 - keySize * 2.2;
     const delBg = this.add.graphics();
     delBg.fillStyle(C.ERROR, 0.12);
-    delBg.fillRoundedRect(delX - delW / 2, ctrlY - keySize / 2, delW, keySize, 8);
+    delBg.fillRoundedRect(delX - delW / 2, ctrlY - ctrlH / 2, delW, ctrlH, 7);
     const delLabel = this.add.text(delX, ctrlY, 'DEL', {
-      fontSize: '14px',
+      fontSize: `${fontSize * 0.75}px`,
       fontFamily: FONT,
       fontStyle: '700',
       color: '#' + C.ERROR.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
-    const delHit = this.add.rectangle(delX, ctrlY, delW, keySize, 0x000000, 0)
+    const delHit = this.add.rectangle(delX, ctrlY, delW, ctrlH, 0x000000, 0)
       .setInteractive({ useHandCursor: true });
     delHit.on('pointerdown', () => this.handleBackspace());
     this.keyboardContainer.add([delBg, delLabel, delHit]);
 
     // ENTER 键
-    const enterW = 150;
-    const enterX = viewW / 2 + 40;
+    const enterW = keySize * 3;
+    const enterX = viewW / 2 + keySize * 0.8;
     const enterBg = this.add.graphics();
     enterBg.fillStyle(C.PRIMARY, 0.8);
-    enterBg.fillRoundedRect(enterX - enterW / 2, ctrlY - keySize / 2, enterW, keySize, 8);
+    enterBg.fillRoundedRect(enterX - enterW / 2, ctrlY - ctrlH / 2, enterW, ctrlH, 7);
     const enterLabel = this.add.text(enterX, ctrlY, '确 定', {
-      fontSize: '16px',
+      fontSize: `${fontSize * 0.85}px`,
       fontFamily: FONT_CN,
       color: '#ffffff',
     }).setOrigin(0.5);
-    const enterHit = this.add.rectangle(enterX, ctrlY, enterW, keySize, 0x000000, 0)
+    const enterHit = this.add.rectangle(enterX, ctrlY, enterW, ctrlH, 0x000000, 0)
       .setInteractive({ useHandCursor: true });
     enterHit.on('pointerdown', () => this.submitAnswer());
     enterHit.on('pointerover', () => {
       enterBg.clear();
       enterBg.fillStyle(0x7fb069, 0.9);
-      enterBg.fillRoundedRect(enterX - enterW / 2 - 1, ctrlY - keySize / 2 - 1, enterW + 2, keySize + 2, 9);
+      enterBg.fillRoundedRect(enterX - enterW / 2 - 1, ctrlY - ctrlH / 2 - 1, enterW + 2, ctrlH + 2, 8);
     });
     enterHit.on('pointerout', () => {
       enterBg.clear();
       enterBg.fillStyle(C.PRIMARY, 0.8);
-      enterBg.fillRoundedRect(enterX - enterW / 2, ctrlY - keySize / 2, enterW, keySize, 8);
+      enterBg.fillRoundedRect(enterX - enterW / 2, ctrlY - ctrlH / 2, enterW, ctrlH, 7);
     });
     this.keyboardContainer.add([enterBg, enterLabel, enterHit]);
   }
@@ -894,8 +926,6 @@ export class GameScene extends Phaser.Scene {
   //  游戏主循环
   // ==============================================================
   gameLoop() {
-    if (this.isPaused) return;
-
     const me = this.players.get(this.mySocketId);
     if (!me) return;
 
