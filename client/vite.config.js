@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // GitHub Pages 使用相对路径，服务器部署用 /parkour/
-  base: process.env.GITHUB_PAGES ? './' : '/parkour/',
+  // GitHub Pages 使用相对路径，服务器部署用 /english-parkour/
+  base: process.env.GITHUB_PAGES ? './' : '/english-parkour/',
   server: {
     port: 5173,
     proxy: {
