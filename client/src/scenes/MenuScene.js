@@ -28,8 +28,8 @@ export class MenuScene extends Phaser.Scene {
     // 多标签页检测
     this.checkDuplicateTab();
 
-    // 播放 BGM（暂时禁用，排查错误）
-    // this.soundGenerator.playBGM('menu');
+    // 播放 BGM
+    this.soundGenerator.playBGM('menu');
   }
 
   createBackground() {
@@ -70,24 +70,24 @@ export class MenuScene extends Phaser.Scene {
       const logo = this.add.image(width / 2, 120, 'menu-logo');
       logo.setScale(0.8);
 
-      // 入场动画（暂时禁用）
-      // this.tweens.add({
-      //   targets: logo,
-      //   scale: { from: 0, to: 0.8 },
-      //   alpha: { from: 0, to: 1 },
-      //   duration: 800,
-      //   ease: 'Back.out',
-      // });
+      // 入场动画
+      this.tweens.add({
+        targets: logo,
+        scale: { from: 0, to: 0.8 },
+        alpha: { from: 0, to: 1 },
+        duration: 800,
+        ease: 'Back.easeOut',
+      });
 
-      // 呼吸动画（暂时禁用）
-      // this.tweens.add({
-      //   targets: logo,
-      //   scale: 0.85,
-      //   duration: 2000,
-      //   yoyo: true,
-      //   repeat: -1,
-      //   ease: 'Sine.inOut',
-      // });
+      // 呼吸动画
+      this.tweens.add({
+        targets: logo,
+        scale: 0.85,
+        duration: 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
     } else {
       // 文字 Logo
       const title = this.add.text(width / 2, 100, '英语跑酷', {
@@ -103,25 +103,25 @@ export class MenuScene extends Phaser.Scene {
         color: '#888888',
       }).setOrigin(0.5);
 
-      // 入场动画（暂时禁用）
-      // this.tweens.add({
-      //   targets: [title, subtitle],
-      //   alpha: { from: 0, to: 1 },
-      //   y: '+=20',
-      //   duration: 600,
-      //   ease: 'Power2',
-      // });
+      // 入场动画
+      this.tweens.add({
+        targets: [title, subtitle],
+        alpha: { from: 0, to: 1 },
+        y: '+=20',
+        duration: 600,
+        ease: 'Power2',
+      });
 
-      // 标题呼吸动画（暂时禁用）
-      // this.tweens.add({
-      //   targets: title,
-      //   scaleX: 1.05,
-      //   scaleY: 1.05,
-      //   duration: 2000,
-      //   yoyo: true,
-      //   repeat: -1,
-      //   ease: 'Sine.inOut',
-      // });
+      // 标题呼吸动画
+      this.tweens.add({
+        targets: title,
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
     }
   }
 
@@ -138,15 +138,15 @@ export class MenuScene extends Phaser.Scene {
       const rightChar = this.add.image(width - 100, height - 150, 'menu-character');
       rightChar.setScale(0.8);
 
-      // 浮动动画（暂时禁用）
-      // this.tweens.add({
-      //   targets: [leftChar, rightChar],
-      //   y: '+=20',
-      //   duration: 1500,
-      //   yoyo: true,
-      //   repeat: -1,
-      //   ease: 'Sine.inOut',
-      // });
+      // 浮动动画
+      this.tweens.add({
+        targets: [leftChar, rightChar],
+        y: '+=20',
+        duration: 1500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
     }
   }
 
@@ -197,7 +197,7 @@ export class MenuScene extends Phaser.Scene {
       maxLength: 12,
     });
 
-    // 房间码输入框（默认隐藏）
+    // 房间码容器（只包含 Phaser GameObject，不混入 DOM 元素）
     this.roomCodeContainer = this.add.container(0, 0);
     this.roomCodeContainer.setVisible(false);
 
@@ -217,7 +217,8 @@ export class MenuScene extends Phaser.Scene {
       maxLength: 6,
       numeric: true,
     });
-    this.roomCodeContainer.add(this.roomInput.domElement);
+    // 注意：DOM 元素的可见性独立管理，见 showRoomInput() / setVisible 相关逻辑
+    this.roomInput.domElement.style.display = 'none';
   }
 
   createLabel(x, y, text) {
@@ -359,16 +360,16 @@ export class MenuScene extends Phaser.Scene {
       onClick();
     });
 
-    // 入场动画（暂时禁用，可能导致 gameObject.once 错误）
-    // container.setAlpha(0);
-    // this.tweens.add({
-    //   targets: container,
-    //   alpha: 1,
-    //   y: y,
-    //   duration: 500,
-    //   delay: 200,
-    //   ease: 'Power2',
-    // });
+    // 入场动画
+    container.setAlpha(0);
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      y: y,
+      duration: 500,
+      delay: 200,
+      ease: 'Power2',
+    });
 
     return container;
   }
@@ -391,6 +392,9 @@ export class MenuScene extends Phaser.Scene {
   handleJoinRoom() {
     // 显示房间码输入
     this.roomCodeContainer.setVisible(true);
+    if (this.roomInput?.domElement) {
+      this.roomInput.domElement.style.display = '';
+    }
 
     const name = this.nameInput?.value?.trim();
     const code = this.roomInput?.value?.trim();
@@ -428,6 +432,9 @@ export class MenuScene extends Phaser.Scene {
 
   showRoomInput() {
     this.roomCodeContainer.setVisible(true);
+    if (this.roomInput?.domElement) {
+      this.roomInput.domElement.style.display = '';
+    }
     // 重新定位输入框
     const { width, height } = this.scale;
     const roomInput = document.getElementById('roomInput');

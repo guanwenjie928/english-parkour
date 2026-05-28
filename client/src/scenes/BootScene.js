@@ -7,6 +7,47 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
+    const { width, height } = this.scale;
+
+    // === 加载进度 UI ===
+    const bg = this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
+    bg.setDepth(1000);
+
+    const titleText = this.add.text(width / 2, height * 0.35, '英语跑酷', {
+      fontSize: '48px',
+      fontFamily: 'Arial Black',
+      color: '#00d4ff',
+    }).setOrigin(0.5).setDepth(1000);
+
+    const loadingText = this.add.text(width / 2, height * 0.45, '加载中...', {
+      fontSize: '18px',
+      color: '#888888',
+    }).setOrigin(0.5).setDepth(1000);
+
+    // 进度条背景
+    const barWidth = 400;
+    const barHeight = 12;
+    const barX = (width - barWidth) / 2;
+    const barY = height * 0.52;
+    this.add.rectangle(width / 2, barY + barHeight / 2, barWidth + 4, barHeight + 4, 0x3a3a5e).setDepth(1000);
+    const progressBar = this.add.rectangle(barX + 2, barY + 2, 0, barHeight, 0x00d4ff)
+      .setOrigin(0, 0).setDepth(1000);
+
+    // 百分比文字
+    const percentText = this.add.text(width / 2, height * 0.56, '0%', {
+      fontSize: '16px',
+      color: '#00d4ff',
+    }).setOrigin(0.5).setDepth(1000);
+
+    // 监听加载进度
+    this.load.on('progress', (value) => {
+      progressBar.width = barWidth * value;
+      percentText.setText(`${Math.floor(value * 100)}%`);
+    });
+
+    // 为了让加载画面可见（首次加载时可能非常快），这里保留进度 UI
+    // 并在 create() 中做短暂停留
+
     // === 角色精灵图（单张 sheet 替代 8 张独立帧） ===
     this.load.image('run-sheet', 'assets/characters/run-sheet.jpg');
     this.load.image('pose-sheet', 'assets/characters/pose-sheet.jpg');
@@ -34,12 +75,23 @@ export class BootScene extends Phaser.Scene {
     this.load.image('menu-character', 'assets/ui/menu-character.png');
 
     // 音效: 全部由 SoundGenerator 程序化合成，零 mp3 文件
-    // SoundGenerator.get() 惰性初始化，首次 play() 时自动创建 AudioContext
   }
 
   create() {
     // 初始化 SoundGenerator（提前解锁 AudioContext）
     SoundGenerator.unlock();
+
+    const { width, height } = this.scale;
+
+    // 显示初始化状态（页面可能已经被 preload UI 占据）
+    // 清除 preload 中的 UI 元素，显示"初始化中"
+    this.children.removeAll(true);
+
+    this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
+    this.add.text(width / 2, height * 0.45, '正在初始化...', {
+      fontSize: '20px',
+      color: '#00d4ff',
+    }).setOrigin(0.5);
 
     // === 从跑步 sheet (512×256 = 4列×2行, 每格128×128) 逐帧裁剪 ===
     const runSheet = this.textures.get('run-sheet');
@@ -103,7 +155,9 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    // 过渡到菜单场景
-    this.scene.start('MenuScene');
+    // 短暂停顿让用户看到"初始化完成"，然后过渡到菜单
+    this.time.delayedCall(200, () => {
+      this.scene.start('MenuScene');
+    });
   }
 }

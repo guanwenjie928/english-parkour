@@ -63,6 +63,9 @@ class LocalGameEngine {
     this.playerId = this._genId();
     this.eventHandlers = new Map();
 
+    // 兼容 NetworkManager 的 socket.id 访问模式
+    this.socket = { id: this.playerId };
+
     // 单词引擎
     this.wordBank = getWordBank();
 
