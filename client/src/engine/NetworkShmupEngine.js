@@ -1,6 +1,7 @@
 // 射击弹幕多人网络引擎 — Socket.io /shmup 命名空间客户端封装
 // 与 ShmupEngine 共享相同的公共接口，ShmupScene 可透明切换
 // 架构：乐观输入 + 服务端权威纠正
+import { io } from 'socket.io-client';
 
 export class NetworkShmupEngine {
   constructor(serverUrl = '') {

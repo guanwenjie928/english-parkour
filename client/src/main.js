@@ -197,8 +197,11 @@ class NetworkManager {
 
 // === 模式检测 ===
 // local=1 → 强制本地模式；mode=race → 旧跑酷模式；默认 → 打字射击
+// 修复：不再依赖全局 io（异步加载有竞态），改用 hostname 判断
 const urlParams = new URLSearchParams(location.search);
-const isLocalMode = typeof io === 'undefined' || urlParams.get('local') === '1';
+const isLocalMode = urlParams.get('local') === '1'
+  || location.hostname === 'localhost'
+  || location.hostname.includes('github.io');
 const isRaceMode = urlParams.get('mode') === 'race';
 
 if (isLocalMode) {
