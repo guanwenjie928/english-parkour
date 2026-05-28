@@ -31,6 +31,10 @@ export class GameScene extends Phaser.Scene {
     this.mySocketId = null;
     this.items = [];
     this.wordChallenge = null;
+    this.comboCount = 0;
+    this.starCount = 0;
+    this.totalCorrect = 0;
+    this.gameStarted = false;
     this._speedLineTimer = 0;
   }
 
@@ -209,6 +213,22 @@ export class GameScene extends Phaser.Scene {
       fontFamily: FONT,
       fontStyle: '800',
       color: '#' + C.TEXT_WARM.toString(16).padStart(6, '0'),
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(101);
+
+    // 连击/星星（计时器右侧）
+    const fontSizeSm = Math.max(11, viewW * 0.011);
+    this.comboText = this.add.text(72, headerY - 6, '', {
+      fontSize: `${fontSizeSm}px`,
+      fontFamily: FONT,
+      fontStyle: '700',
+      color: '#' + C.HIGHLIGHT.toString(16).padStart(6, '0'),
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(101);
+
+    this.starText = this.add.text(72, headerY + 8, '', {
+      fontSize: `${fontSizeSm}px`,
+      fontFamily: FONT,
+      fontStyle: '700',
+      color: '#ffd700',
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(101);
 
     // 排名（右侧）
@@ -411,6 +431,7 @@ export class GameScene extends Phaser.Scene {
   //  网络事件监听
   // ==============================================================
   setupNetworkListeners() {
+    window.network.on('countdown', (data) => this.showCountdown(data.count));
     window.network.on('position_sync', (data) => this.updatePlayers(data));
     window.network.on('word_challenge', (data) => this.showWordChallenge(data));
     window.network.on('answer_result', (data) => this.handleAnswerResult(data));
@@ -461,6 +482,55 @@ export class GameScene extends Phaser.Scene {
       const myRank = sorted.findIndex((p) => p.socketId === this.mySocketId) + 1;
       this.rankText.setText(myRank > 0 ? `#${myRank}/${sorted.length}` : '');
     }
+  }
+
+  // ==============================================================
+  //  3-2-1-GO 开场倒计时动画（仪式感）
+  // ==============================================================
+  showCountdown(count) {
+    const { width, height } = this.scale;
+    const size = Math.max(80, Math.min(150, height * 0.2));
+
+    const text = count === 0 ? 'GO!' : String(count);
+    const color = count === 0 ? C.HIGHLIGHT : (count <= 2 ? C.ERROR : C.PRIMARY);
+
+    const overlay = this.add.text(width / 2, height / 2, text, {
+      fontSize: `${size}px`,
+      fontFamily: FONT,
+      fontStyle: '900',
+      color: '#' + color.toString(16).padStart(6, '0'),
+      stroke: '#ffffff',
+      strokeThickness: 6,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(300);
+
+    // 弹入 + 缩放淡出
+    overlay.setScale(2).setAlpha(0);
+    this.tweens.add({
+      targets: overlay,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      duration: 200,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: overlay,
+          scaleX: 1.5,
+          scaleY: 1.5,
+          alpha: 0,
+          duration: 600,
+          ease: 'Cubic.easeIn',
+          onComplete: () => overlay.destroy(),
+        });
+      },
+    });
+
+    // GO! 时启动游戏
+    if (count === 0) {
+      this.gameStarted = true;
+    }
+
+    this.soundGenerator.play(count === 0 ? 'victory' : 'click');
   }
 
   // ==============================================================
@@ -555,10 +625,24 @@ export class GameScene extends Phaser.Scene {
 
     if (data.correct) {
       player.speed = data.newSpeed;
+      player.progress = data.progress;
       this.soundGenerator.play('correct');
 
-      // 治愈粒子爆发
+      // 粒子爆发
       burstParticles(this, player.sprite.x, player.sprite.y, C.PRIMARY, 12);
+
+      // 连击系统
+      this.comboCount++;
+      this.totalCorrect++;
+      if (this.comboCount >= 3) {
+        this.showComboFX(player.sprite.x, player.sprite.y);
+      }
+
+      // 星星收集：每 5 题正确掉落一颗星
+      if (this.totalCorrect % 5 === 0) {
+        this.starCount++;
+        this.showStarFX(player.sprite.x, player.sprite.y);
+      }
 
       // 闪绿
       player.sprite.setTint(0xaaffaa);
@@ -567,7 +651,11 @@ export class GameScene extends Phaser.Scene {
       });
     } else {
       player.speed = data.newSpeed;
+      player.progress = data.progress;
       this.soundGenerator.play('wrong');
+
+      // 连击中断
+      this.comboCount = 0;
 
       // 屏幕微震
       this.cameras.main.shake(180, 0.004);
@@ -929,6 +1017,17 @@ export class GameScene extends Phaser.Scene {
     const me = this.players.get(this.mySocketId);
     if (!me) return;
 
+    // 刷新连击/星星 HUD
+    if (this.comboText && this.comboCount >= 3) {
+      this.comboText.setText(`🔥 x${this.comboCount}`);
+      this.comboText.setAlpha(1);
+    } else if (this.comboText) {
+      this.comboText.setAlpha(0);
+    }
+    if (this.starText && this.starCount > 0) {
+      this.starText.setText(`⭐ ${this.starCount}`);
+    }
+
     // Camera 平滑跟随
     const targetCamX = me.sprite.x - this.scale.width * 0.4;
     this.cameras.main.scrollX = lerp(
@@ -964,6 +1063,79 @@ export class GameScene extends Phaser.Scene {
       gfx.fillRoundedRect(lx, ly, 8 + Math.random() * 12, 2, 1);
     }
     this.time.delayedCall(200, () => gfx.destroy());
+  }
+
+  // ==============================================================
+  //  连击特效（3+ 连击时触发）
+  // ==============================================================
+  showComboFX(x, y) {
+    const { width } = this.scale;
+    const fontSize = Math.max(28, Math.min(52, width * 0.045));
+
+    const comboText = this.add.text(x, y - 50, `🔥 ${this.comboCount} 连击!`, {
+      fontSize: `${fontSize}px`,
+      fontFamily: FONT,
+      fontStyle: '900',
+      color: '#' + C.HIGHLIGHT.toString(16).padStart(6, '0'),
+      stroke: '#ffffff',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(250);
+
+    // 弹跳 + 上浮消失
+    comboText.setScale(0.3);
+    this.tweens.add({
+      targets: comboText,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      y: y - 80,
+      duration: 600,
+      ease: 'Back.easeOut',
+    });
+    this.tweens.add({
+      targets: comboText,
+      alpha: 0,
+      y: y - 110,
+      duration: 400,
+      delay: 400,
+      ease: 'Cubic.easeIn',
+      onComplete: () => comboText.destroy(),
+    });
+
+    // 额外金色粒子
+    burstParticles(this, x, y - 20, C.HIGHLIGHT, 8);
+  }
+
+  // ==============================================================
+  //  星星收集特效（每 5 题正确触发）
+  // ==============================================================
+  showStarFX(x, y) {
+    const { width } = this.scale;
+
+    // 大星星
+    const starText = this.add.text(x, y - 60, '⭐', {
+      fontSize: `${Math.max(36, width * 0.05)}px`,
+    }).setOrigin(0.5).setDepth(250);
+
+    starText.setScale(0);
+    this.tweens.add({
+      targets: starText,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      duration: 400,
+      ease: 'Back.easeOut',
+    });
+    this.tweens.add({
+      targets: starText,
+      alpha: 0,
+      y: y - 100,
+      duration: 500,
+      delay: 400,
+      ease: 'Cubic.easeIn',
+      onComplete: () => starText.destroy(),
+    });
+
+    // 星星粒子
+    burstParticles(this, x, y - 15, 0xffd700, 10);
   }
 
   shutdown() {
