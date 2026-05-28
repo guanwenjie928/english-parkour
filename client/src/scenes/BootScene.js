@@ -8,25 +8,25 @@ export class BootScene extends Phaser.Scene {
 
   preload() {
     // === 角色精灵图（单张 sheet 替代 8 张独立帧） ===
-    this.load.image('run-sheet', 'assets/characters/run-sheet.png');
-    this.load.image('pose-sheet', 'assets/characters/pose-sheet.png');
+    this.load.image('run-sheet', 'assets/characters/run-sheet.jpg');
+    this.load.image('pose-sheet', 'assets/characters/pose-sheet.jpg');
 
     // === 道具条带（单张 320×64 含 5 个道具图标） ===
-    this.load.image('items-strip', 'assets/items/items-strip.png');
+    this.load.image('items-strip', 'assets/items/items-strip.jpg');
 
     // === 地图背景（城市 P0） ===
-    this.load.image('bg-city-far', 'assets/backgrounds/city-far.png');
-    this.load.image('bg-city-mid', 'assets/backgrounds/city-mid.png');
-    this.load.image('bg-city-near', 'assets/backgrounds/city-near.png');
+    this.load.image('bg-city-far', 'assets/backgrounds/city-far.jpg');
+    this.load.image('bg-city-mid', 'assets/backgrounds/city-mid.jpg');
+    this.load.image('bg-city-near', 'assets/backgrounds/city-near.jpg');
 
     // === 特效条带 ===
-    this.load.image('vfx-strip', 'assets/vfx/vfx-strip.png');
+    this.load.image('vfx-strip', 'assets/vfx/vfx-strip.jpg');
 
     // === UI Atlas ===
-    this.load.image('ui-atlas', 'assets/ui/ui-atlas.png');
+    this.load.image('ui-atlas', 'assets/ui/ui-atlas.jpg');
 
     // === 障碍物 ===
-    this.load.image('obstacles-strip', 'assets/obstacles/obstacles-strip.png');
+    this.load.image('obstacles-strip', 'assets/obstacles/obstacles-strip.jpg');
 
     // 音效: 全部由 SoundGenerator 程序化合成，零 mp3 文件
     // SoundGenerator.get() 惰性初始化，首次 play() 时自动创建 AudioContext

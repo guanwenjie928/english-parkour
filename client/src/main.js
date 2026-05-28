@@ -32,7 +32,7 @@ const game = new Phaser.Game(config);
 // 网络管理器 — 稳定化版本
 class NetworkManager {
   constructor() {
-    this.socket = io('http://localhost:3000', {
+    this.socket = io('', {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -196,7 +196,17 @@ window.network = new NetworkManager();
 const TAB_CHANNEL = new BroadcastChannel('english_parkour');
 
 window.checkDuplicateSession = () => {
-  const sessionId = crypto.randomUUID();
+  // 兼容不支持 crypto.randomUUID 的浏览器
+  const genId = () => {
+    if (typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  };
+  const sessionId = genId();
   localStorage.setItem('parkour_session', sessionId);
 
   TAB_CHANNEL.postMessage({ type: 'new_tab', sessionId });

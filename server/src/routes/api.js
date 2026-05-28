@@ -10,6 +10,11 @@ const { GameRoom } = require('../game/GameRoom');
 const router = express.Router();
 
 module.exports = (rooms, wordEngine) => {
+  // 健康检查
+  router.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: Date.now() });
+  });
+
   // 创建房间
   router.post('/rooms', async (req, res) => {
     try {
@@ -225,7 +230,7 @@ module.exports = (rooms, wordEngine) => {
       sql += ' ORDER BY RAND() LIMIT ?';
       params.push(parseInt(limit));
 
-      const [words] = await db.execute(sql, params);
+      const [words] = await db.query(sql, params);
       res.json({ words });
     } catch (err) {
       Logger.error('get_words_error', { error: err.message });

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -48,7 +49,7 @@ app.use('/api/words/import', apiRoutes.importRoutes());
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // 错误兜底
-const { safeHandler } = setupErrorBoundary(server, io, rooms);
+const { safeHandler } = setupErrorBoundary(app, io, rooms);
 
 // WebSocket 设置
 setupGameSocket(io, rooms, wordEngine);
