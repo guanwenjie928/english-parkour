@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
 import { SoundGenerator } from '../utils/SoundGenerator.js';
 
-const PXL = {
-  BG: 0x0a0a1e, ACCENT: 0x5abaff, TEXT: 0xe8e8ff, TEXT_DIM: 0x8888aa,
-  GREEN: 0x4aff6a,
+const SDV = {
+  SKY_TOP: 0x6496d6, SKY_BOT: 0xd4c8a0,
+  GRASS: 0x6ab840, GRASS_D: 0x559a30,
+  PANEL: 0x6b4018, PANEL_BORDER: 0x9a6a38,
+  TEXT: 0xf5e6c8, TEXT_DIM: 0xb0a080,
+  GREEN: 0x6ac840, GOLD: 0xffc840, ACCENT: 0x6496d6,
 };
 const FONT = 'Nunito';
-const FONT_CN = 'ZCOOL KuaiLe';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -14,339 +16,175 @@ export class BootScene extends Phaser.Scene {
     this.gameAssetsLoaded = false;
   }
 
-  // === 阶段 1：快速加载菜单素材（目标 2-3s 出菜单）===
   preload() {
-    const { width, height } = this.scale;
-    this._createLoadingUI(width, height);
-
-    // 仅加载菜单必需的素材
+    const { width: w, height: h } = this.scale;
+    this._createLoadingUI(w, h);
     this.load.image('menu-character', 'assets/ui/menu-character.png');
     this.load.image('menu-bg', 'assets/ui/menu-bg.jpg');
   }
 
-  _createLoadingUI(width, height) {
-    // 深空背景
-    this.add.rectangle(width / 2, height / 2, width, height, PXL.BG).setDepth(1000);
+  _createLoadingUI(w, h) {
+    // 天空渐变
+    const steps = 30;
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const r = Phaser.Math.Linear(SDV.SKY_TOP >> 16 & 0xff, SDV.SKY_BOT >> 16 & 0xff, t);
+      const g = Phaser.Math.Linear(SDV.SKY_TOP >> 8 & 0xff, SDV.SKY_BOT >> 8 & 0xff, t);
+      const b = Phaser.Math.Linear(SDV.SKY_TOP & 0xff, SDV.SKY_BOT & 0xff, t);
+      this.add.rectangle(w / 2, h * 0.4 * t, w, Math.ceil(h * 0.4 / steps) + 1, (Math.floor(r) << 16) | (Math.floor(g) << 8) | Math.floor(b)).setDepth(1000);
+    }
+    this.add.rectangle(w / 2, h * 0.42 + (h - h * 0.42) / 2, w, h - h * 0.42, SDV.GRASS).setDepth(1000);
 
-    // 像素星空
-    for (let i = 0; i < 40; i++) {
-      const sx = Math.random() * width;
-      const sy = Math.random() * height;
-      const ss = Math.random() < 0.3 ? 2 : 1;
-      this.add.rectangle(sx, sy, ss, ss, PXL.TEXT, 0.15 + Math.random() * 0.3).setDepth(1000);
+    // 像素云
+    for (let i = 0; i < 5; i++) {
+      const cx = Math.random() * w, cy = h * 0.04 + Math.random() * h * 0.16;
+      const cs = 2 + Math.floor(Math.random() * 3);
+      const parts = [[0,0],[1,-1],[2,0],[0,1],[1,1],[2,1]];
+      for (const [dx, dy] of parts) {
+        this.add.rectangle(cx + dx * cs, cy + dy * cs, cs, cs, 0xf0f0f0, 0.6).setDepth(1000);
+      }
     }
 
     // 标题
-    this.add.text(width / 2, height * 0.32, 'ENGLISH PARKOUR', {
-      fontSize: '36px',
-      fontFamily: FONT,
-      fontStyle: '900',
-      color: '#5abaff',
-      stroke: '#000000',
-      strokeThickness: 3,
+    this.add.text(w / 2, h * 0.30, 'ENGLISH PARKOUR', {
+      fontSize: '36px', fontFamily: FONT, fontStyle: '900',
+      color: '#f5e6c8', stroke: '#3a2818', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(1002);
 
-    this.add.text(width / 2, height * 0.40, 'Typing Shmup', {
-      fontSize: '14px',
-      fontFamily: FONT,
-      fontStyle: '700',
-      color: '#8888aa',
+    this.add.text(w / 2, h * 0.37, 'Typing Shmup', {
+      fontSize: '14px', fontFamily: FONT, fontStyle: '700', color: '#c4a070',
     }).setOrigin(0.5).setDepth(1002);
 
-    // 像素风进度条
-    const barW = 300;
-    const barH = 8;
-    const barX = (width - barW) / 2;
-    const barY = height * 0.48;
-
-    // 进度条背景
-    const barBgGfx = this.add.graphics().setDepth(1002);
-    barBgGfx.fillStyle(0x1a1a3e, 1);
-    barBgGfx.fillRect(barX, barY, barW, barH);
-    barBgGfx.lineStyle(1, PXL.ACCENT, 0.4);
-    barBgGfx.strokeRect(barX, barY, barW, barH);
-
-    // 进度条填充
-    const barFillBg = this.add.graphics().setDepth(1004);
-    barFillBg.fillStyle(0x0a0a1e, 1);
-    barFillBg.fillRect(barX, barY, barW, barH);
-
-    this._progressBar = this.add.rectangle(barX, barY, 0, barH, PXL.GREEN)
+    // 木质进度条
+    const barW = 280, barH = 6, barX = (w - barW) / 2, barY = h * 0.46;
+    this.add.graphics().setDepth(1002)
+      .fillStyle(SDV.PANEL, 1).fillRoundedRect(barX, barY, barW, barH, 3)
+      .lineStyle(1, SDV.PANEL_BORDER, 0.6).strokeRoundedRect(barX, barY, barW, barH, 3);
+    this._progressBar = this.add.rectangle(barX, barY, 0, barH, SDV.GOLD)
       .setOrigin(0, 0).setDepth(1003);
-
-    this._percentText = this.add.text(width / 2, height * 0.52, '0%', {
-      fontSize: '12px',
-      fontFamily: FONT,
-      fontStyle: '700',
-      color: '#4aff6a',
+    this._percentText = this.add.text(w / 2, h * 0.50, '0%', {
+      fontSize: '12px', fontFamily: FONT, fontStyle: '700', color: '#c4a070',
+    }).setOrigin(0.5).setDepth(1002);
+    this.add.text(w / 2, h * 0.54, 'LOADING...', {
+      fontSize: '10px', fontFamily: FONT, color: '#8a6a50',
     }).setOrigin(0.5).setDepth(1002);
 
-    this.add.text(width / 2, height * 0.57, 'LOADING...', {
-      fontSize: '10px',
-      fontFamily: FONT,
-      color: '#666688',
-    }).setOrigin(0.5).setDepth(1002);
-
-    this.load.on('progress', (value) => {
-      this._progressBar.width = barW * value;
-      this._percentText.setText(`${Math.floor(value * 100)}%`);
+    this.load.on('progress', (v) => {
+      this._progressBar.width = barW * v;
+      this._percentText.setText(`${Math.floor(v * 100)}%`);
     });
   }
 
   create() {
-    const { width, height } = this.scale;
+    const { width: w, height: h } = this.scale;
     this.children.removeAll(true);
 
-    // 深空背景
-    this.add.rectangle(width / 2, height / 2, width, height, PXL.BG);
+    // 天空
+    const steps = 30;
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const r = Phaser.Math.Linear(SDV.SKY_TOP >> 16 & 0xff, SDV.SKY_BOT >> 16 & 0xff, t);
+      const g = Phaser.Math.Linear(SDV.SKY_TOP >> 8 & 0xff, SDV.SKY_BOT >> 8 & 0xff, t);
+      const b = Phaser.Math.Linear(SDV.SKY_TOP & 0xff, SDV.SKY_BOT & 0xff, t);
+      this.add.rectangle(w / 2, h * 0.4 * t, w, Math.ceil(h * 0.4 / steps) + 1, (Math.floor(r) << 16) | (Math.floor(g) << 8) | Math.floor(b));
+    }
+    this.add.rectangle(w / 2, h * 0.42 + (h - h * 0.42) / 2, w, h - h * 0.42, SDV.GRASS);
 
-    // 星空
-    for (let i = 0; i < 60; i++) {
-      const sx = Math.random() * width;
-      const sy = Math.random() * height;
-      const ss = Math.random() < 0.2 ? 2 : 1;
-      this.add.rectangle(sx, sy, ss, ss, PXL.TEXT, 0.15 + Math.random() * 0.4).setDepth(0);
+    // 草纹
+    for (let x = 0; x < w; x += 15 + Math.floor(Math.random() * 20)) {
+      this.add.rectangle(x, h * 0.44 + Math.random() * 20, 6 + Math.random() * 8, 1.5, SDV.GRASS_D, 0.3);
     }
 
-    // 启动点击开始画面
-    this.showStartScreen();
+    // 云
+    for (let i = 0; i < 6; i++) {
+      const cx = Math.random() * w, cy = h * 0.04 + Math.random() * h * 0.18;
+      const cs = 2 + Math.floor(Math.random() * 3);
+      const parts = [[0,0],[1,-1],[2,0],[0,1],[1,1],[2,1]];
+      for (const [dx, dy] of parts) {
+        this.add.rectangle(cx + dx * cs, cy + dy * cs, cs, cs, 0xf0f0f0, 0.7);
+      }
+    }
 
-    // 阶段 2：后台加载
+    this._showStartScreen(w, h);
     this._loadGameAssets();
   }
 
-  // === 阶段 2：后台加载游戏素材（弹幕模式无需额外素材，跳过）===
   _loadGameAssets() {
-    // 弹幕射击模式所有视觉都是程序化像素绘制，无需加载额外素材
     this.gameAssetsLoaded = true;
-
-    this.load.once('complete', () => {
-      console.log('[BootScene] 全部就绪（程序化像素渲染模式）');
-    });
-
-    // 如果有素材可用则加载，否则直接标记完成
+    this.load.once('complete', () => console.log('[BootScene] ready'));
     this.load.start();
   }
 
-  // === 纹理帧切片（兼容旧/新尺寸） ===
-  _processTextures() {
-    const runSheet = this.textures.get('run-sheet');
-    if (runSheet && !runSheet.has('run_1')) {
-      const rw = runSheet.source[0]?.width || 512;
-      const rh = runSheet.source[0]?.height || 256;
-      const cellW = Math.floor(rw / 4);
-      const cellH = Math.floor(rh / 2);
-      for (let i = 0; i < 8; i++) {
-        const col = i % 4;
-        const row = Math.floor(i / 4);
-        runSheet.add(`run_${i + 1}`, 0, col * cellW, row * cellH, cellW, cellH);
-      }
-    }
-
-    const poseSheet = this.textures.get('pose-sheet');
-    const poseNames = ['idle', 'slide', 'stun', 'victory', 'shield'];
-    if (poseSheet && !poseSheet.has('pose_idle')) {
-      const pw = poseSheet.source[0]?.width || 640;
-      const ph = poseSheet.source[0]?.height || 128;
-      const cellW = Math.floor(pw / 5);
-      poseNames.forEach((name, i) => {
-        poseSheet.add(`pose_${name}`, 0, i * cellW, 0, cellW, ph);
-      });
-    }
-
-    const itemsStrip = this.textures.get('items-strip');
-    const itemNames = ['rocket', 'electric', 'banana', 'shield', 'magnet'];
-    if (itemsStrip && !itemsStrip.has('item-rocket')) {
-      const iw = itemsStrip.source[0]?.width || 320;
-      const ih = itemsStrip.source[0]?.height || 64;
-      const cellW = Math.floor(iw / 5);
-      itemNames.forEach((name, i) => {
-        itemsStrip.add(`item-${name}`, 0, i * cellW, 0, cellW, ih);
-      });
-    }
-  }
-
-  // === 动画创建 ===
-  _createAnimations() {
-    const runSheet = this.textures.get('run-sheet');
-    if (!this.anims.exists('run') && runSheet && runSheet.has('run_1')) {
-      this.anims.create({
-        key: 'run',
-        frames: Array.from({ length: 8 }, (_, i) => ({ key: 'run-sheet', frame: `run_${i + 1}` })),
-        frameRate: 12,
-        repeat: -1,
-      });
-    }
-
-    const vfxStrip = this.textures.get('vfx-strip');
-    if (vfxStrip && !vfxStrip.has('electric_0')) {
-      const source = vfxStrip.source[0];
-      const imgW = source.width;
-      const imgH = source.height;
-      const frameCount = 10;
-      const frameH = Math.floor(imgH / frameCount);
-
-      for (let i = 0; i < 5; i++) {
-        vfxStrip.add(`electric_${i}`, 0, 0, i * frameH, imgW, frameH);
-      }
-      for (let i = 0; i < 5; i++) {
-        vfxStrip.add(`shield_${i}`, 0, 0, (5 + i) * frameH, imgW, frameH);
-      }
-    }
-
-    if (!this.anims.exists('electric-hit')) {
-      this.anims.create({
-        key: 'electric-hit',
-        frames: Array.from({ length: 5 }, (_, i) => ({ key: 'vfx-strip', frame: `electric_${i}` })),
-        frameRate: 10,
-        repeat: 0,
-      });
-    }
-
-    if (!this.anims.exists('shield-bubble')) {
-      this.anims.create({
-        key: 'shield-bubble',
-        frames: Array.from({ length: 5 }, (_, i) => ({ key: 'vfx-strip', frame: `shield_${i}` })),
-        frameRate: 10,
-        repeat: 0,
-      });
-    }
-  }
-
-  // === 点击开始画面（像素街机风格） ===
-  showStartScreen() {
-    const { width, height } = this.scale;
-
-    // 扫描线
-    const scanGfx = this.add.graphics().setDepth(1).setAlpha(0.04);
-    for (let y = 0; y < height; y += 3) {
-      scanGfx.fillStyle(0x000000);
-      scanGfx.fillRect(0, y, width, 1);
-    }
-
-    // 标题
-    const titleSize = Math.max(40, Math.min(64, width * 0.07));
-    const title = this.add.text(width / 2, height * 0.22, 'ENGLISH PARKOUR', {
-      fontSize: `${titleSize}px`,
-      fontFamily: FONT,
-      fontStyle: '900',
-      color: '#5abaff',
-      stroke: '#000000',
-      strokeThickness: 5,
+  _showStartScreen(w, h) {
+    const titleSize = Math.max(40, Math.min(60, w * 0.065));
+    const title = this.add.text(w / 2, h * 0.20, 'ENGLISH PARKOUR', {
+      fontSize: `${titleSize}px`, fontFamily: FONT, fontStyle: '900',
+      color: '#f5e6c8', stroke: '#3a2818', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(2);
 
-    this.add.text(width / 2, height * 0.30, '—  TYPING  SHMUP  —', {
-      fontSize: `${Math.max(12, titleSize * 0.28)}px`,
-      fontFamily: FONT,
-      fontStyle: '700',
-      color: '#8888aa',
+    this.add.text(w / 2, h * 0.27, '- TYPING SHMUP -', {
+      fontSize: `${Math.max(12, titleSize * 0.26)}px`, fontFamily: FONT, fontStyle: '700', color: '#c4a070',
     }).setOrigin(0.5).setDepth(2);
 
-    // 标题入场
-    title.setAlpha(0);
-    title.y += 20;
-    this.tweens.add({
-      targets: title,
-      alpha: 1,
-      y: height * 0.22,
-      duration: 600,
-      ease: 'Back.easeOut',
-    });
+    title.setAlpha(0).y += 20;
+    this.tweens.add({ targets: title, alpha: 1, y: h * 0.20, duration: 550, ease: 'Back.easeOut' });
 
-    // 角色立绘（如果存在）
     if (this.textures.exists('menu-character')) {
-      const char = this.add.image(width / 2, height * 0.46, 'menu-character')
-        .setScale(0.55).setDepth(1).setAlpha(0.35).setTint(0x4a4a8a);
-
-      this.tweens.add({
-        targets: char,
-        scaleX: 0.58,
-        scaleY: 0.58,
-        duration: 3000,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+      const char = this.add.image(w / 2, h * 0.42, 'menu-character')
+        .setScale(0.48).setDepth(1).setAlpha(0.35).setTint(0x5a8a3a);
+      this.tweens.add({ targets: char, scaleX: 0.51, scaleY: 0.51, duration: 3000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
 
-    // 像素 START 按钮
-    const btnW = 260;
-    const btnH = 52;
-    const btnX = width / 2 - btnW / 2;
-    const btnY = height * 0.68;
-
+    // 木质按钮
+    const btnW = 250, btnH = 50, btnX = w / 2 - btnW / 2, btnY = h * 0.65;
     const btnGfx = this.add.graphics().setDepth(3);
-    btnGfx.fillStyle(0x000000, 0.5);
-    btnGfx.fillRect(btnX + 2, btnY + 2, btnW, btnH);
-    btnGfx.fillStyle(PXL.GREEN, 1);
-    btnGfx.fillRect(btnX, btnY, btnW, btnH);
-    btnGfx.lineStyle(2, 0xffffff, 0.3);
-    btnGfx.strokeRect(btnX, btnY, btnW, btnH);
+    btnGfx.fillStyle(0x000000, 0.3);
+    btnGfx.fillRoundedRect(btnX + 2, btnY + 2, btnW, btnH, 4);
+    btnGfx.fillStyle(SDV.GREEN);
+    btnGfx.fillRoundedRect(btnX, btnY, btnW, btnH, 4);
+    btnGfx.fillStyle(0xffffff, 0.12);
+    btnGfx.fillRoundedRect(btnX + 2, btnY + 2, btnW - 4, btnH / 3, 2);
 
-    const btnText = this.add.text(width / 2, btnY + btnH / 2, 'PRESS START', {
-      fontSize: '18px',
-      fontFamily: FONT,
-      fontStyle: '900',
-      color: '#0a0a1e',
+    const btnText = this.add.text(w / 2, btnY + btnH / 2, 'PRESS START', {
+      fontSize: '18px', fontFamily: FONT, fontStyle: '900', color: '#ffffff',
     }).setOrigin(0.5).setDepth(4);
 
-    const hitArea = this.add.rectangle(width / 2, btnY + btnH / 2, btnW, btnH, 0x000000, 0)
+    this.tweens.add({ targets: btnText, alpha: 0.5, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    const hit = this.add.rectangle(w / 2, btnY + btnH / 2, btnW, btnH, 0, 0)
       .setInteractive({ useHandCursor: true }).setDepth(5);
-
-    // 按钮闪烁
-    this.tweens.add({
-      targets: btnText,
-      alpha: 0.5,
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    hitArea.on('pointerover', () => {
+    hit.on('pointerover', () => {
       btnGfx.clear();
-      btnGfx.fillStyle(0x000000, 0.5);
-      btnGfx.fillRect(btnX + 3, btnY + 3, btnW, btnH);
-      btnGfx.fillStyle(PXL.GREEN, 1);
-      btnGfx.fillRect(btnX - 1, btnY - 1, btnW + 2, btnH + 2);
-      btnGfx.lineStyle(2, 0xffffff, 0.5);
-      btnGfx.strokeRect(btnX - 1, btnY - 1, btnW + 2, btnH + 2);
+      btnGfx.fillStyle(0x000000, 0.3);
+      btnGfx.fillRoundedRect(btnX + 3, btnY + 3, btnW, btnH, 4);
+      btnGfx.fillStyle(SDV.GREEN);
+      btnGfx.fillRoundedRect(btnX - 1, btnY - 1, btnW + 2, btnH + 2, 4);
+      btnGfx.fillStyle(0xffffff, 0.2);
+      btnGfx.fillRoundedRect(btnX + 1, btnY + 1, btnW - 2, btnH / 3, 2);
       btnText.setScale(1.05);
     });
-
-    hitArea.on('pointerout', () => {
+    hit.on('pointerout', () => {
       btnGfx.clear();
-      btnGfx.fillStyle(0x000000, 0.5);
-      btnGfx.fillRect(btnX + 2, btnY + 2, btnW, btnH);
-      btnGfx.fillStyle(PXL.GREEN, 1);
-      btnGfx.fillRect(btnX, btnY, btnW, btnH);
-      btnGfx.lineStyle(2, 0xffffff, 0.3);
-      btnGfx.strokeRect(btnX, btnY, btnW, btnH);
+      btnGfx.fillStyle(0x000000, 0.3);
+      btnGfx.fillRoundedRect(btnX + 2, btnY + 2, btnW, btnH, 4);
+      btnGfx.fillStyle(SDV.GREEN);
+      btnGfx.fillRoundedRect(btnX, btnY, btnW, btnH, 4);
+      btnGfx.fillStyle(0xffffff, 0.12);
+      btnGfx.fillRoundedRect(btnX + 2, btnY + 2, btnW - 4, btnH / 3, 2);
       btnText.setScale(1);
     });
 
-    const startGame = () => {
-      SoundGenerator.unlock();
-      this.scene.start('MenuScene');
-    };
-
-    hitArea.on('pointerdown', startGame);
+    const startGame = () => { SoundGenerator.unlock(); this.scene.start('MenuScene'); };
+    hit.on('pointerdown', startGame);
     this.input.keyboard.once('keydown-SPACE', startGame);
     this.input.keyboard.once('keydown-ENTER', startGame);
 
-    // 底部提示
-    this.add.text(width / 2, height * 0.78, 'PRESS SPACE / ENTER OR TAP TO START', {
-      fontSize: '11px',
-      fontFamily: FONT,
-      fontStyle: '600',
-      color: '#666688',
+    this.add.text(w / 2, h * 0.76, 'PRESS SPACE / ENTER', {
+      fontSize: '11px', fontFamily: FONT, fontStyle: '600', color: '#8a6a50',
     }).setOrigin(0.5).setDepth(3);
 
-    this.add.text(width / 2, height - 18, 'v2.0  PIXEL ARCADE', {
-      fontSize: '10px',
-      fontFamily: FONT,
-      fontStyle: '700',
-      color: '#555577',
+    this.add.text(w / 2, h - 18, 'v2.0  STARDEW  VALLEY', {
+      fontSize: '10px', fontFamily: FONT, fontStyle: '700', color: '#6a5a40',
     }).setOrigin(0.5).setDepth(3);
   }
 }
