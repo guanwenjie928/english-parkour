@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { SoundGenerator } from '../utils/SoundGenerator.js';
-import { GHIBLI, drawRoundedRect, drawSoftBorder, drawGlassPanel } from '../utils/ColorConfig.js';
-import { createFloatingParticles } from '../utils/AnimationHelper.js';
 
-const C = GHIBLI;
+const PXL = {
+  BG: 0x0a0a1e, ACCENT: 0x5abaff, TEXT: 0xe8e8ff, TEXT_DIM: 0x8888aa,
+  GREEN: 0x4aff6a,
+};
 const FONT = 'Nunito';
 const FONT_CN = 'ZCOOL KuaiLe';
 
@@ -24,71 +25,67 @@ export class BootScene extends Phaser.Scene {
   }
 
   _createLoadingUI(width, height) {
-    // 奶油白全屏背景
-    this.add.rectangle(width / 2, height / 2, width, height, C.BG_CREAM).setDepth(1000);
+    // 深空背景
+    this.add.rectangle(width / 2, height / 2, width, height, PXL.BG).setDepth(1000);
 
-    // 飘浮粒子
-    createFloatingParticles(this, width, height, {
-      count: 6, type: 'petal', depth: 1001,
-    });
+    // 像素星空
+    for (let i = 0; i < 40; i++) {
+      const sx = Math.random() * width;
+      const sy = Math.random() * height;
+      const ss = Math.random() < 0.3 ? 2 : 1;
+      this.add.rectangle(sx, sy, ss, ss, PXL.TEXT, 0.15 + Math.random() * 0.3).setDepth(1000);
+    }
 
     // 标题
-    this.add.text(width / 2, height * 0.32, '英语跑酷', {
-      fontSize: '48px',
-      fontFamily: FONT_CN,
-      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setDepth(1002);
-
-    this.add.text(width / 2, height * 0.40, 'English Parkour', {
-      fontSize: '16px',
+    this.add.text(width / 2, height * 0.32, 'ENGLISH PARKOUR', {
+      fontSize: '36px',
       fontFamily: FONT,
-      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+      fontStyle: '900',
+      color: '#5abaff',
+      stroke: '#000000',
+      strokeThickness: 3,
     }).setOrigin(0.5).setDepth(1002);
 
-    // 圆角进度条
-    const barW = 300;
-    const barH = 10;
-    const barX = (width - barW) / 2;
-    const barY = height * 0.50;
-
-    // 进度条背景（圆角）
-    const barBgGfx = this.add.graphics().setDepth(1002);
-    barBgGfx.fillStyle(C.BG_SAND, 1);
-    barBgGfx.fillRoundedRect(barX, barY, barW, barH, 5);
-
-    // 进度条边框
-    const barBorderGfx = this.add.graphics().setDepth(1002);
-    barBorderGfx.lineStyle(2, C.ACCENT, 0.6);
-    barBorderGfx.strokeRoundedRect(barX, barY, barW, barH, 5);
-
-    // 进度条填充
-    this._progressBar = this.add.rectangle(barX, barY, 0, barH, C.PRIMARY)
-      .setOrigin(0, 0).setDepth(1003);
-    // 用 mask 实现圆角填充效果
-    const maskGfx = this.add.graphics().setDepth(1004);
-    maskGfx.fillStyle(0xffffff);
-    maskGfx.fillRoundedRect(barX, barY, barW, barH, 5);
-    this._progressBar.setMask(maskGfx.createGeometryMask());
-
-    // 百分比文字
-    this._percentText = this.add.text(width / 2, height * 0.56, '0%', {
+    this.add.text(width / 2, height * 0.40, 'Typing Shmup', {
       fontSize: '14px',
       fontFamily: FONT,
-      fontStyle: '600',
-      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
+      fontStyle: '700',
+      color: '#8888aa',
     }).setOrigin(0.5).setDepth(1002);
 
-    // 加载提示
-    this.add.text(width / 2, height * 0.62, '正在准备...', {
+    // 像素风进度条
+    const barW = 300;
+    const barH = 8;
+    const barX = (width - barW) / 2;
+    const barY = height * 0.48;
+
+    // 进度条背景
+    const barBgGfx = this.add.graphics().setDepth(1002);
+    barBgGfx.fillStyle(0x1a1a3e, 1);
+    barBgGfx.fillRect(barX, barY, barW, barH);
+    barBgGfx.lineStyle(1, PXL.ACCENT, 0.4);
+    barBgGfx.strokeRect(barX, barY, barW, barH);
+
+    // 进度条填充
+    const barFillBg = this.add.graphics().setDepth(1004);
+    barFillBg.fillStyle(0x0a0a1e, 1);
+    barFillBg.fillRect(barX, barY, barW, barH);
+
+    this._progressBar = this.add.rectangle(barX, barY, 0, barH, PXL.GREEN)
+      .setOrigin(0, 0).setDepth(1003);
+
+    this._percentText = this.add.text(width / 2, height * 0.52, '0%', {
       fontSize: '12px',
       fontFamily: FONT,
-      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+      fontStyle: '700',
+      color: '#4aff6a',
     }).setOrigin(0.5).setDepth(1002);
 
-    // 底部装饰草地
-    const grassGfx = this.add.graphics().setDepth(1001);
-    grassGfx.fillStyle(C.GRASS, 0.3);
-    grassGfx.fillRoundedRect(0, height - 40, width, 80, 20);
+    this.add.text(width / 2, height * 0.57, 'LOADING...', {
+      fontSize: '10px',
+      fontFamily: FONT,
+      color: '#666688',
+    }).setOrigin(0.5).setDepth(1002);
 
     this.load.on('progress', (value) => {
       this._progressBar.width = barW * value;
@@ -100,36 +97,34 @@ export class BootScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.children.removeAll(true);
 
-    // 奶油白背景
-    this.add.rectangle(width / 2, height / 2, width, height, C.BG_CREAM);
+    // 深空背景
+    this.add.rectangle(width / 2, height / 2, width, height, PXL.BG);
 
-    // 纹理预处理（仅处理已加载的菜单素材）
-    this._processTextures();
+    // 星空
+    for (let i = 0; i < 60; i++) {
+      const sx = Math.random() * width;
+      const sy = Math.random() * height;
+      const ss = Math.random() < 0.2 ? 2 : 1;
+      this.add.rectangle(sx, sy, ss, ss, PXL.TEXT, 0.15 + Math.random() * 0.4).setDepth(0);
+    }
 
     // 启动点击开始画面
     this.showStartScreen();
 
-    // 阶段 2：后台加载游戏素材
+    // 阶段 2：后台加载
     this._loadGameAssets();
   }
 
-  // === 阶段 2：后台加载游戏素材 ===
+  // === 阶段 2：后台加载游戏素材（弹幕模式无需额外素材，跳过）===
   _loadGameAssets() {
-    this.load.image('run-sheet', 'assets/characters/run-sheet.png');
-    this.load.image('pose-sheet', 'assets/characters/pose-sheet.png');
-    this.load.image('items-strip', 'assets/items/items-strip.png');
-    this.load.image('vfx-strip', 'assets/vfx/vfx-strip.png');
-    this.load.image('bg-city-far', 'assets/backgrounds/city-far.jpg');
-    this.load.image('bg-city-mid', 'assets/backgrounds/city-mid.jpg');
-    this.load.image('bg-city-near', 'assets/backgrounds/city-near.jpg');
+    // 弹幕射击模式所有视觉都是程序化像素绘制，无需加载额外素材
+    this.gameAssetsLoaded = true;
 
     this.load.once('complete', () => {
-      this.gameAssetsLoaded = true;
-      this._processTextures();
-      this._createAnimations();
-      console.log('[BootScene] 游戏素材后台加载完成');
+      console.log('[BootScene] 全部就绪（程序化像素渲染模式）');
     });
 
+    // 如果有素材可用则加载，否则直接标记完成
     this.load.start();
   }
 
@@ -218,131 +213,118 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
-  // === 点击开始画面（吉卜力治愈风格） ===
+  // === 点击开始画面（像素街机风格） ===
   showStartScreen() {
     const { width, height } = this.scale;
 
-    // 飘浮花瓣背景
-    createFloatingParticles(this, width, height, {
-      count: 10, type: 'petal', depth: 1,
-    });
+    // 扫描线
+    const scanGfx = this.add.graphics().setDepth(1).setAlpha(0.04);
+    for (let y = 0; y < height; y += 3) {
+      scanGfx.fillStyle(0x000000);
+      scanGfx.fillRect(0, y, width, 1);
+    }
 
-    // 天空渐变（多个色条模拟）
-    const skyColors = [C.ACCENT, 0xb8e0e0, 0xccd5c8, 0xdde8d0, C.BG_CREAM];
-    const bandH = Math.ceil(height / skyColors.length);
-    skyColors.forEach((color, i) => {
-      this.add.rectangle(width / 2, i * bandH + bandH / 2, width, bandH + 1, color, 0.5)
-        .setDepth(0);
-    });
-
-    // 底部草地装饰
-    const grassGfx = this.add.graphics().setDepth(1);
-    grassGfx.fillStyle(C.GRASS, 0.25);
-    grassGfx.fillRoundedRect(-20, height - 60, width + 40, 120, 30);
-
-    // --- Logo 卡片 ---
-    const logoW = 360;
-    const logoH = 90;
-    const logoX = (width - logoW) / 2;
-    const logoY = height * 0.10;
-
-    const logoGfx = this.add.graphics().setDepth(2);
-    drawGlassPanel(logoGfx, logoX, logoY, logoW, logoH, 14, C.BG_CREAM, 0.92, C.ACCENT, 2);
-
-    const title = this.add.text(width / 2, logoY + 30, '英语跑酷', {
-      fontSize: '42px',
-      fontFamily: FONT_CN,
-      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setDepth(3);
-
-    this.add.text(width / 2, logoY + 68, 'ENGLISH PARKOUR', {
-      fontSize: '12px',
+    // 标题
+    const titleSize = Math.max(40, Math.min(64, width * 0.07));
+    const title = this.add.text(width / 2, height * 0.22, 'ENGLISH PARKOUR', {
+      fontSize: `${titleSize}px`,
       fontFamily: FONT,
-      fontStyle: '600',
-      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setDepth(3);
+      fontStyle: '900',
+      color: '#5abaff',
+      stroke: '#000000',
+      strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(2);
 
-    // Logo 入场动画
+    this.add.text(width / 2, height * 0.30, '—  TYPING  SHMUP  —', {
+      fontSize: `${Math.max(12, titleSize * 0.28)}px`,
+      fontFamily: FONT,
+      fontStyle: '700',
+      color: '#8888aa',
+    }).setOrigin(0.5).setDepth(2);
+
+    // 标题入场
     title.setAlpha(0);
     title.y += 20;
     this.tweens.add({
       targets: title,
       alpha: 1,
-      y: logoY + 30,
+      y: height * 0.22,
       duration: 600,
       ease: 'Back.easeOut',
     });
 
-    // --- 角色立绘 ---
+    // 角色立绘（如果存在）
     if (this.textures.exists('menu-character')) {
-      const leftChar = this.add.image(110, height * 0.55, 'menu-character')
-        .setScale(0.42).setDepth(1).setAlpha(0.8);
-      const rightChar = this.add.image(width - 110, height * 0.55, 'menu-character')
-        .setScale(0.42).setFlipX(true).setDepth(1).setAlpha(0.8);
+      const char = this.add.image(width / 2, height * 0.46, 'menu-character')
+        .setScale(0.55).setDepth(1).setAlpha(0.35).setTint(0x4a4a8a);
 
-      // 呼吸动画
-      [leftChar, rightChar].forEach((char) => {
-        this.tweens.add({
-          targets: char,
-          scaleX: 0.44,
-          scaleY: 0.44,
-          duration: 3000,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
+      this.tweens.add({
+        targets: char,
+        scaleX: 0.58,
+        scaleY: 0.58,
+        duration: 3000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
       });
     }
 
-    // --- 开始按钮 ---
+    // 像素 START 按钮
     const btnW = 260;
-    const btnH = 56;
+    const btnH = 52;
     const btnX = width / 2 - btnW / 2;
-    const btnY = height * 0.72 - btnH / 2;
+    const btnY = height * 0.68;
 
-    const btnBg = this.add.graphics().setDepth(3);
-    btnBg.fillStyle(C.PRIMARY, 1);
-    btnBg.fillRoundedRect(btnX, btnY, btnW, btnH, 14);
-    btnBg.lineStyle(2, 0x5a8a3e, 0.4);
-    btnBg.strokeRoundedRect(btnX, btnY, btnW, btnH, 14);
+    const btnGfx = this.add.graphics().setDepth(3);
+    btnGfx.fillStyle(0x000000, 0.5);
+    btnGfx.fillRect(btnX + 2, btnY + 2, btnW, btnH);
+    btnGfx.fillStyle(PXL.GREEN, 1);
+    btnGfx.fillRect(btnX, btnY, btnW, btnH);
+    btnGfx.lineStyle(2, 0xffffff, 0.3);
+    btnGfx.strokeRect(btnX, btnY, btnW, btnH);
 
-    const btnText = this.add.text(width / 2, height * 0.72, '开始游戏', {
-      fontSize: '20px',
-      fontFamily: FONT_CN,
-      color: '#ffffff',
+    const btnText = this.add.text(width / 2, btnY + btnH / 2, 'PRESS START', {
+      fontSize: '18px',
+      fontFamily: FONT,
+      fontStyle: '900',
+      color: '#0a0a1e',
     }).setOrigin(0.5).setDepth(4);
 
-    // 按钮热区
-    const hitArea = this.add.rectangle(width / 2, height * 0.72, btnW, btnH, 0x000000, 0)
+    const hitArea = this.add.rectangle(width / 2, btnY + btnH / 2, btnW, btnH, 0x000000, 0)
       .setInteractive({ useHandCursor: true }).setDepth(5);
 
-    // 按钮呼吸动画
+    // 按钮闪烁
     this.tweens.add({
-      targets: [btnBg, btnText],
-      alpha: 0.7,
-      duration: 800,
+      targets: btnText,
+      alpha: 0.5,
+      duration: 600,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
 
     hitArea.on('pointerover', () => {
-      btnBg.clear();
-      btnBg.fillStyle(0x7fb069, 1);
-      btnBg.fillRoundedRect(btnX - 2, btnY - 2, btnW + 4, btnH + 4, 16);
-      btnBg.lineStyle(2, 0x5a8a3e, 0.5);
-      btnBg.strokeRoundedRect(btnX - 2, btnY - 2, btnW + 4, btnH + 4, 16);
+      btnGfx.clear();
+      btnGfx.fillStyle(0x000000, 0.5);
+      btnGfx.fillRect(btnX + 3, btnY + 3, btnW, btnH);
+      btnGfx.fillStyle(PXL.GREEN, 1);
+      btnGfx.fillRect(btnX - 1, btnY - 1, btnW + 2, btnH + 2);
+      btnGfx.lineStyle(2, 0xffffff, 0.5);
+      btnGfx.strokeRect(btnX - 1, btnY - 1, btnW + 2, btnH + 2);
+      btnText.setScale(1.05);
     });
 
     hitArea.on('pointerout', () => {
-      btnBg.clear();
-      btnBg.fillStyle(C.PRIMARY, 1);
-      btnBg.fillRoundedRect(btnX, btnY, btnW, btnH, 14);
-      btnBg.lineStyle(2, 0x5a8a3e, 0.4);
-      btnBg.strokeRoundedRect(btnX, btnY, btnW, btnH, 14);
+      btnGfx.clear();
+      btnGfx.fillStyle(0x000000, 0.5);
+      btnGfx.fillRect(btnX + 2, btnY + 2, btnW, btnH);
+      btnGfx.fillStyle(PXL.GREEN, 1);
+      btnGfx.fillRect(btnX, btnY, btnW, btnH);
+      btnGfx.lineStyle(2, 0xffffff, 0.3);
+      btnGfx.strokeRect(btnX, btnY, btnW, btnH);
+      btnText.setScale(1);
     });
 
-    // 点击开始
     const startGame = () => {
       SoundGenerator.unlock();
       this.scene.start('MenuScene');
@@ -353,38 +335,18 @@ export class BootScene extends Phaser.Scene {
     this.input.keyboard.once('keydown-ENTER', startGame);
 
     // 底部提示
-    this.add.text(width / 2, height * 0.80, '点击屏幕 或 按空格键/回车键 开始', {
-      fontSize: '13px',
-      fontFamily: FONT_CN,
-      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setDepth(3);
-
-    // 版本标识
-    this.add.text(width / 2, height - 22, 'v2.0  Ghibli', {
-      fontSize: '10px',
+    this.add.text(width / 2, height * 0.78, 'PRESS SPACE / ENTER OR TAP TO START', {
+      fontSize: '11px',
       fontFamily: FONT,
       fontStyle: '600',
-      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+      color: '#666688',
     }).setOrigin(0.5).setDepth(3);
 
-    // 加载提示
-    if (!this.gameAssetsLoaded) {
-      const loadingHint = this.add.text(width / 2, height - 42, '正在准备游戏素材...', {
-        fontSize: '11px',
-        fontFamily: FONT,
-        color: '#' + C.ACCENT.toString(16).padStart(6, '0'),
-      }).setOrigin(0.5).setDepth(3);
-
-      const checkLoaded = this.time.addEvent({
-        delay: 500,
-        callback: () => {
-          if (this.gameAssetsLoaded) {
-            loadingHint.setVisible(false);
-            checkLoaded.remove();
-          }
-        },
-        loop: true,
-      });
-    }
+    this.add.text(width / 2, height - 18, 'v2.0  PIXEL ARCADE', {
+      fontSize: '10px',
+      fontFamily: FONT,
+      fontStyle: '700',
+      color: '#555577',
+    }).setOrigin(0.5).setDepth(3);
   }
 }

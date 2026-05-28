@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { GameScene } from './scenes/GameScene';
+import { ShmupScene } from './scenes/ShmupScene';
 import { TeacherScene } from './scenes/TeacherScene';
 import { ResultScene } from './scenes/ResultScene';
 import { ConnectionManager } from './utils/ConnectionManager.js';
@@ -10,6 +11,7 @@ import { MessageQueue } from './utils/MessageQueue.js';
 import { OfflineDetector } from './utils/OfflineDetector.js';
 import { SoundGenerator } from './utils/SoundGenerator.js';
 import { LocalGameEngine } from './engine/LocalGameEngine.js';
+import { ShmupEngine } from './engine/ShmupEngine.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -21,7 +23,7 @@ const config = {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, MenuScene, LobbyScene, GameScene, TeacherScene, ResultScene],
+  scene: [BootScene, MenuScene, LobbyScene, GameScene, ShmupScene, TeacherScene, ResultScene],
   physics: {
     default: 'arcade',
     arcade: { gravity: { y: 800 } },
@@ -195,8 +197,8 @@ class NetworkManager {
 const isLocalMode = typeof io === 'undefined' || typeof io !== 'function' || location.search.includes('local=1');
 
 if (isLocalMode) {
-  window.network = new LocalGameEngine();
-  console.log('[LocalGameEngine] 本地模式已启动');
+  window.network = new ShmupEngine();
+  console.log('[ShmupEngine] 本地弹幕模式已启动');
 } else {
   window.network = new NetworkManager();
   console.log('[NetworkManager] 联网模式已启动');

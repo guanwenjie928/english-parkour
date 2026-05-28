@@ -186,6 +186,11 @@ class WordBank {
   clearRoom(roomId) {
     this.usedInRoom.delete(roomId);
   }
+
+  // 获取所有单词（供 ShmupEngine 使用）
+  getAllWords() {
+    return [...this.byId.values()];
+  }
 }
 
 // 单例导出
