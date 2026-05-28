@@ -270,12 +270,18 @@ export class GameScene extends Phaser.Scene {
     const trackData = this.tracks[data.trackNumber - 1];
     if (!trackData) return;
 
+    // 纹理未就绪时跳过（BootScene 后台加载中）
+    if (!this.textures.exists('run-sheet')) return;
+
     const startX = this.progressToWorldX(0);
 
-    // 角色精灵（pose-sheet idle 帧用于初始，run-sheet 用于跑酷）
+    // 角色精灵 — 仅在动画就绪时播放
     const sprite = this.add.sprite(startX, trackData.y, 'run-sheet')
-      .setScale(0.6).setDepth(50)
-      .play('run');
+      .setScale(0.6).setDepth(50);
+
+    if (this.anims.exists('run')) {
+      sprite.play('run');
+    }
 
     const nameText = this.add.text(startX, trackData.y - 36, data.name || '', {
       fontSize: '10px',

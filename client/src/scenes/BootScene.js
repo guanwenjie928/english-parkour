@@ -71,9 +71,11 @@ export class BootScene extends Phaser.Scene {
     // 深色背景
     this.add.rectangle(width / 2, height / 2, width, height, PX.BG_DARK);
 
-    // 纹理预处理 + 动画创建
+    // 纹理预处理（仅处理已加载的菜单素材）
     this._processTextures();
-    this._createAnimations();
+
+    // 注意：不在此处调用 _createAnimations()，游戏素材尚未加载
+    // 动画会在 _loadGameAssets() 完成后创建
 
     // 启动点击开始画面
     this.showStartScreen();
@@ -149,7 +151,9 @@ export class BootScene extends Phaser.Scene {
   // === 动画创建 ===
   _createAnimations() {
     // 跑步动画（8 帧，12fps）
-    if (!this.anims.exists('run')) {
+    // 仅在 run-sheet 纹理已加载时才创建
+    const runSheet = this.textures.get('run-sheet');
+    if (!this.anims.exists('run') && runSheet && runSheet.has('run_1')) {
       this.anims.create({
         key: 'run',
         frames: Array.from({ length: 8 }, (_, i) => ({ key: 'run-sheet', frame: `run_${i + 1}` })),
