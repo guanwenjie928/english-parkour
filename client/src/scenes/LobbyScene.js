@@ -367,6 +367,8 @@ export class LobbyScene extends Phaser.Scene {
 
     if (count === 1) {
       setTimeout(() => {
+        // 防止场景已切换后操作已销毁的文本对象
+        if (!this.scene.isActive() || !this.countdownText || !this.countdownText.active) return;
         this.countdownText.setText('GO!');
         this.countdownText.setColor('#' + PX.PRIMARY.toString(16).padStart(6, '0'));
         this.soundGenerator.play('go');

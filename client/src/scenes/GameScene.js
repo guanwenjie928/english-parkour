@@ -54,6 +54,9 @@ export class GameScene extends Phaser.Scene {
     // 虚拟键盘
     this.createVirtualKeyboard();
 
+    // 物理键盘输入（桌面端使用）
+    this.setupPhysicalKeyboard();
+
     // 道具栏
     this.createItemPanel();
 
@@ -82,13 +85,13 @@ export class GameScene extends Phaser.Scene {
     this.bgMid = this.add.tileSprite(width / 2, height / 2, width, height, 'bg-city-mid');
     this.bgNear = this.add.tileSprite(width / 2, height * 0.8, width, height * 0.4, 'bg-city-near');
 
-    this.bgFar.setScrollFactor(0);
-    this.bgMid.setScrollFactor(0);
-    this.bgNear.setScrollFactor(0);
+    this.bgFar.setScrollFactor(0).setDepth(1);
+    this.bgMid.setScrollFactor(0).setDepth(2);
+    this.bgNear.setScrollFactor(0).setDepth(3);
 
     // 半透明暖色叠加层（统一画面色调）
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, PX.BG_DARK, 0.15);
-    overlay.setScrollFactor(0).setDepth(0);
+    overlay.setScrollFactor(0).setDepth(4);
   }
 
   createTracks() {
@@ -103,10 +106,10 @@ export class GameScene extends Phaser.Scene {
       const trackBg = this.add.rectangle(
         width / 2, y, width, trackHeight - 4,
         i % 2 === 0 ? PX.BG_MID : 0x352518
-      ).setScrollFactor(0);
+      ).setScrollFactor(0).setDepth(5);
 
       // 跑道边框（像素绿）
-      const borderGfx = this.add.graphics().setScrollFactor(0);
+      const borderGfx = this.add.graphics().setScrollFactor(0).setDepth(6);
       const topY = y - trackHeight / 2;
       const botY = y + trackHeight / 2;
       borderGfx.fillStyle(PX.PRIMARY, 0.6);
@@ -118,13 +121,13 @@ export class GameScene extends Phaser.Scene {
         fontSize: '14px',
         fontFamily: FONT,
         color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
-      }).setOrigin(0.5).setScrollFactor(0);
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(7);
 
       this.tracks.push({ y, height: trackHeight });
     }
 
     // 玩家精灵容器
-    this.playerContainer = this.add.container(0, 0);
+    this.playerContainer = this.add.container(0, 0).setDepth(50);
   }
 
   createVirtualKeyboard() {
@@ -267,6 +270,26 @@ export class GameScene extends Phaser.Scene {
     this.keyboardContainer.add([subBorder, submitBtn, subLabel]);
   }
 
+  setupPhysicalKeyboard() {
+    this.input.keyboard.on('keydown', (event) => {
+      // 仅在拼写挑战激活时处理
+      if (!this.keyboardContainer?.visible) return;
+
+      if (event.key === 'Enter') {
+        this.submitAnswer();
+        return;
+      }
+      if (event.key === 'Backspace') {
+        this.handleBackspace();
+        return;
+      }
+      // 单字母输入
+      if (/^[a-zA-Z]$/.test(event.key) && event.key.length === 1) {
+        this.handleKeyInput(event.key);
+      }
+    });
+  }
+
   createItemPanel() {
     const { width, height } = this.scale;
 
@@ -275,7 +298,7 @@ export class GameScene extends Phaser.Scene {
       fontSize: '8px',
       fontFamily: FONT,
       color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setScrollFactor(0);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(60);
 
     this.itemSlots = [];
     for (let i = 0; i < 2; i++) {
@@ -285,14 +308,16 @@ export class GameScene extends Phaser.Scene {
       // 道具槽（像素边框方块）
       const slot = this.add.rectangle(x, y, 60, 60, PX.BG_MID)
         .setScrollFactor(0)
+        .setDepth(60)
         .setInteractive({ useHandCursor: true });
 
-      const slotBorder = this.add.graphics().setScrollFactor(0);
+      const slotBorder = this.add.graphics().setScrollFactor(0).setDepth(61);
       drawPixelBorder(slotBorder, x - 32, y - 32, 64, 64, PX.PRIMARY, 2);
 
       const icon = this.add.image(x, y, 'items-strip')
         .setVisible(false)
-        .setScrollFactor(0);
+        .setScrollFactor(0)
+        .setDepth(62);
 
       slot.on('pointerdown', () => this.useItem(i));
 
@@ -306,8 +331,8 @@ export class GameScene extends Phaser.Scene {
     const barWidth = width - 40;
 
     // 背景条
-    const barBg = this.add.rectangle(width / 2, barY, barWidth, 6, PX.BG_MID).setScrollFactor(0);
-    const barBorder = this.add.graphics().setScrollFactor(0);
+    const barBg = this.add.rectangle(width / 2, barY, barWidth, 6, PX.BG_MID).setScrollFactor(0).setDepth(60);
+    const barBorder = this.add.graphics().setScrollFactor(0).setDepth(60);
     drawPixelBorder(barBorder, 18, barY - 5, barWidth + 4, 10, PX.BG_LIGHT, 1);
 
     // 8 个玩家位置（像素方块代替圆点）
@@ -317,12 +342,12 @@ export class GameScene extends Phaser.Scene {
       const dotSize = i === this.myTrack - 1 ? 12 : 8;
       const dotX = 20 + dotSize;
 
-      const dotGfx = this.add.graphics().setScrollFactor(0);
+      const dotGfx = this.add.graphics().setScrollFactor(0).setDepth(61);
       dotGfx.fillStyle(color.tint, 1);
       dotGfx.fillRect(dotX - dotSize / 2, barY - dotSize / 2, dotSize, dotSize);
 
       // 小方块边框
-      const borderGfx = this.add.graphics().setScrollFactor(0);
+      const borderGfx = this.add.graphics().setScrollFactor(0).setDepth(61);
       drawPixelBorder(borderGfx, dotX - dotSize / 2 - 1, barY - dotSize / 2 - 1, dotSize + 2, dotSize + 2, 0xffffff, 1);
 
       this.progressDots.push({ dotGfx, borderGfx, progress: 0, dotSize });
@@ -333,22 +358,22 @@ export class GameScene extends Phaser.Scene {
       fontSize: '9px',
       fontFamily: FONT,
       color: '#' + PX.HIGHLIGHT.toString(16).padStart(6, '0'),
-    }).setOrigin(1, 0.5).setScrollFactor(0);
+    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(61);
   }
 
   createTimer() {
     const { width } = this.scale;
 
     // 计时器背景
-    const timerBg = this.add.rectangle(width / 2, 42, 120, 40, PX.BG_DARK, 0.85).setScrollFactor(0);
-    const timerBorder = this.add.graphics().setScrollFactor(0);
+    const timerBg = this.add.rectangle(width / 2, 42, 120, 40, PX.BG_DARK, 0.85).setScrollFactor(0).setDepth(60);
+    const timerBorder = this.add.graphics().setScrollFactor(0).setDepth(60);
     drawPixelBorder(timerBorder, width / 2 - 62, 22, 124, 40, PX.BG_LIGHT, 1);
 
     this.timerText = this.add.text(width / 2, 42, '90', {
       fontSize: '28px',
       fontFamily: FONT,
       color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setScrollFactor(0);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(61);
   }
 
   setupNetworkListeners() {
@@ -422,17 +447,19 @@ export class GameScene extends Phaser.Scene {
     const trackData = this.tracks[data.trackNumber - 1];
     if (!trackData) return;
 
+    // 玩家精灵（确保 depth 高于背景和跑道）
     const sprite = this.add.sprite(100, trackData.y, 'run-sheet')
-      .setScale(0.8)
+      .setScale(0.6)
+      .setDepth(50)
       .play('run');
 
-    const nameText = this.add.text(100, trackData.y - 40, data.name || '', {
-      fontSize: '12px',
+    const nameText = this.add.text(100, trackData.y - 36, data.name || '', {
+      fontSize: '11px',
       fontFamily: FONT_CN,
       color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
       backgroundColor: '#' + PX.BG_DARK.toString(16).padStart(6, '0') + 'cc',
       padding: { x: 6, y: 2 },
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(51);
 
     const color = PLAYER_COLORS[data.trackNumber - 1];
     sprite.setTint(color.tint);
@@ -538,9 +565,10 @@ export class GameScene extends Phaser.Scene {
     emptySlot.itemType = itemType;
     emptySlot.icon.setVisible(true);
 
-    const itemIndex = ['rocket', 'electric', 'banana', 'shield', 'magnet'].indexOf(itemType);
-    if (itemIndex >= 0) {
-      emptySlot.icon.setCrop(itemIndex * 64, 0, 64, 64);
+    // BootScene 已将 items-strip 预切割为命名帧 item-rocket/item-electric/...
+    const frameName = `item-${itemType}`;
+    if (this.textures.get('items-strip').has(frameName)) {
+      emptySlot.icon.setFrame(frameName);
     }
 
     this.soundGenerator.play('item_get');

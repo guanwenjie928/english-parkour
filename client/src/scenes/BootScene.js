@@ -119,8 +119,15 @@ export class BootScene extends Phaser.Scene {
 
     const vfxStrip = this.textures.get('vfx-strip');
     if (vfxStrip) {
+      // VFX strip 实际尺寸 464×2320（竖条），总 10 帧，每帧 464×232
+      const source = vfxStrip.source[0];
+      const imgW = source.width;
+      const imgH = source.height;
+      const frameCount = 10;  // 5 electric + 5 shield
+      const frameH = Math.floor(imgH / frameCount);
+
       for (let i = 0; i < 5; i++) {
-        vfxStrip.add(`electric_${i}`, 0, 0, i * 256, 256, 256);
+        vfxStrip.add(`electric_${i}`, 0, 0, i * frameH, imgW, frameH);
       }
       this.anims.create({
         key: 'electric-hit',
@@ -130,7 +137,7 @@ export class BootScene extends Phaser.Scene {
       });
 
       for (let i = 0; i < 5; i++) {
-        vfxStrip.add(`shield_${i}`, 0, 0, 1280 + i * 256, 256, 256);
+        vfxStrip.add(`shield_${i}`, 0, 0, (5 + i) * frameH, imgW, frameH);
       }
       this.anims.create({
         key: 'shield-bubble',
