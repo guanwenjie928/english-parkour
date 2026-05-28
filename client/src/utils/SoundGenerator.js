@@ -194,6 +194,17 @@ class SoundGenerator {
   static unlock() {
     const inst = SoundGenerator.get();
     inst.#ensureContext();
+
+    // 浏览器自动播放策略：AudioContext 必须在用户手势后创建/恢复
+    // 注册一次性事件监听，在用户首次交互时恢复 AudioContext
+    if (inst.#ctx && inst.#ctx.state === 'suspended') {
+      const resume = () => {
+        inst.#ensureContext();
+      };
+      document.addEventListener('click', resume, { once: true });
+      document.addEventListener('touchstart', resume, { once: true });
+      document.addEventListener('keydown', resume, { once: true });
+    }
   }
 }
 
