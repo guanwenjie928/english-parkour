@@ -110,3 +110,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Repository
 - GitHub: https://github.com/guanwenjie928/english-parkour
+
+## [0.4.0] — 2026-05-28
+
+### Changed — 拼写驱动前进（核心玩法重构）
+- **真人玩家不再自动跑步** — 完全依赖正确拼写推进进度
+  - 答对 → progress +7%，speed +0.3
+  - 答错 → 1.5s 冷却期，speed -0.3
+  - `LocalGameEngine._tick()` 跳过真人 auto-advance
+  - `server/GameRoom.tick()` 移除所有自动前进逻辑，仅保留位置同步
+- 道具负面效果对齐新逻辑：麻痹需连续答对2题，减速需答对1题
+- 追赶机制：落后 30%+ 额外 +2%
+
+### Changed — 拼写面板不遮挡游戏
+- 全屏 93% 遮罩 → **已删除**
+- `this.isPaused` 暂停机制 → **已删除**
+- 新设计：底部 34% 高度浮动面板，从下方滑入/滑出
+- gameLoop 移除 `if (isPaused) return`
+
+### Changed — 响应式布局
+- 道具面板 (ITEMS)：基于 `viewW * 0.16` / `minDim * 0.14`，右下角定位
+- 图标缩放 = `slotSize / 464`（相对于素材原始尺寸）
+- 进度条边距 = `viewW * 0.09`
+
+### Changed — 菜单页美术重设计
+- 加载 `menu-bg.jpg` 背景
+- 角色立绘居中放大 (scale 0.7，呼吸+浮动双动画)
+- 移除「英语跑酷」大标题和 `menu-logo` 预加载
+
+### Fixed
+- GitHub Pages 404：vite base 从 `/parkour/` 改为 `/english-parkour/`
+- 两阶段加载时序：gameAssetsLoaded 标志位保证纹理就绪
