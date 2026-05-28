@@ -193,19 +193,13 @@ class LocalGameEngine {
         setTimeout(() => {
           bot.isReady = true;
           this.emit('player_ready', { socketId: bot.socketId, ready: true });
-
-          // 全部准备后倒计时
-          if (this._allReady()) {
-            this._transition('countdown');
-          }
+          if (this._allReady()) this._transition('countdown');
         }, 500 + index * 500);
       });
     }
 
     // 检查是否全部准备
-    if (this._allReady()) {
-      this._transition('countdown');
-    }
+    if (this._allReady()) this._transition('countdown');
 
     return { ok: true };
   }
@@ -336,14 +330,20 @@ class LocalGameEngine {
   }
 
   _transition(newStatus) {
-    const sm = STATE_MACHINE[newStatus];
-    if (!sm) return { ok: false };
-    if (!sm.allowedTransitions.has(this.room.status)) {
+    // 获取当前状态的状态机配置
+    const currentSm = STATE_MACHINE[this.room.status];
+    if (!currentSm) return { ok: false };
+    // 检查新状态是否在当前状态的允许转换列表中
+    if (!currentSm.allowedTransitions.has(newStatus)) {
       return { ok: false, reason: 'transition_not_allowed' };
     }
 
     this.room.status = newStatus;
-    sm.onEnter(this);
+    // 执行新状态的 onEnter
+    const newSm = STATE_MACHINE[newStatus];
+    if (newSm && newSm.onEnter) {
+      newSm.onEnter(this);
+    }
     this.emit('room_state', { status: newStatus, code: this.room.code });
 
     return { ok: true };
@@ -367,6 +367,9 @@ class LocalGameEngine {
   startGameLoop() {
     this.room.startedAt = Date.now();
     this.room.elapsed = 0;
+
+    // 发射 game_start 事件（LobbyScene 依赖此事件跳转到 GameScene）
+    this.emit('game_start', {});
 
     // 给所有人发第一题
     this.room.players.forEach((player) => {
