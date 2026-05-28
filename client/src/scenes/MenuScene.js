@@ -20,7 +20,6 @@ export class MenuScene extends Phaser.Scene {
     this.soundGenerator = SoundGenerator.get();
 
     this.createBackground();
-    this.createLogo();
     this.createDecorations();
     this.createPanel();
     this.createButtons();
@@ -65,33 +64,6 @@ export class MenuScene extends Phaser.Scene {
     createFloatingParticles(this, width, height, {
       count: 8, type: 'petal', depth: 0,
     });
-  }
-
-  createLogo() {
-    const { width } = this.scale;
-
-    if (this.textures.exists('menu-logo')) {
-      // 素材 Logo，居中偏上，放大到更显眼的尺寸
-      const logo = this.add.image(width / 2, 75, 'menu-logo');
-      logo.setScale(0.8).setDepth(2);
-      popIn(this, logo, 600);
-    } else {
-      // Fallback: 治愈风文字 Logo
-      const title = this.add.text(width / 2, 90, '英语跑酷', {
-        fontSize: '42px',
-        fontFamily: FONT_CN,
-        color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
-      }).setOrigin(0.5).setDepth(2);
-
-      this.add.text(width / 2, 135, 'ENGLISH PARKOUR', {
-        fontSize: '14px',
-        fontFamily: FONT,
-        fontStyle: '600',
-        color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
-      }).setOrigin(0.5).setDepth(2);
-
-      popIn(this, title, 600);
-    }
   }
 
   createDecorations() {
