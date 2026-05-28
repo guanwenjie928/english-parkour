@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>英语跑酷课堂游戏</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #1a1a2e; }
+    #game-container { width: 100vw; height: 100vh; }
+  </style>
+  <script type="module" crossorigin src="/parkour/assets/index-CRLppcLi.js"></script>
+</head>
+<body>
+  <div id="game-container"></div>
+  <script>
+    // 本地模式不加载 socket.io（纯单机体验）
+    const isLocalMode = location.search.includes('local=1') || location.hostname === 'localhost';
+    if (!isLocalMode) {
+      const script = document.createElement('script');
+      script.src = '/socket.io/socket.io.js';
+      document.head.appendChild(script);
+    }
+  </script>
+</body>
+</html>
