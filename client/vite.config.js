@@ -16,6 +16,6 @@ export default defineConfig({
   build: {
     outDir: '../docs',
     assetsDir: 'assets',
-    emptyOutDir: true,
+    emptyOutDir: false,  // 防止误删 docs/ 下的文档文件
   }
 });

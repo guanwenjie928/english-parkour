@@ -147212,49 +147212,18 @@ class MenuScene extends Phaser.Scene {
     if (this.textures.exists("menu-logo")) {
       const logo = this.add.image(width / 2, 120, "menu-logo");
       logo.setScale(0.8);
-      this.tweens.add({
-        targets: logo,
-        scale: { from: 0, to: 0.8 },
-        alpha: { from: 0, to: 1 },
-        duration: 800,
-        ease: "Back.out"
-      });
-      this.tweens.add({
-        targets: logo,
-        scale: 0.85,
-        duration: 2e3,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut"
-      });
     } else {
-      const title = this.add.text(width / 2, 100, "英语跑酷", {
+      this.add.text(width / 2, 100, "英语跑酷", {
         fontSize: "72px",
         fontFamily: "Arial Black",
         color: "#00d4ff",
         stroke: "#ffffff",
         strokeThickness: 6
       }).setOrigin(0.5);
-      const subtitle = this.add.text(width / 2, 160, "English Parkour", {
+      this.add.text(width / 2, 160, "English Parkour", {
         fontSize: "20px",
         color: "#888888"
       }).setOrigin(0.5);
-      this.tweens.add({
-        targets: [title, subtitle],
-        alpha: { from: 0, to: 1 },
-        y: "+=20",
-        duration: 600,
-        ease: "Power2"
-      });
-      this.tweens.add({
-        targets: title,
-        scaleX: 1.05,
-        scaleY: 1.05,
-        duration: 2e3,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut"
-      });
     }
   }
   createDecorations() {
@@ -147265,14 +147234,6 @@ class MenuScene extends Phaser.Scene {
       leftChar.setFlipX(true);
       const rightChar = this.add.image(width - 100, height - 150, "menu-character");
       rightChar.setScale(0.8);
-      this.tweens.add({
-        targets: [leftChar, rightChar],
-        y: "+=20",
-        duration: 1500,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut"
-      });
     }
   }
   createPanel() {
@@ -147438,15 +147399,6 @@ class MenuScene extends Phaser.Scene {
     bg.on("pointerdown", () => {
       this.soundGenerator.play("click");
       onClick();
-    });
-    container.setAlpha(0);
-    this.tweens.add({
-      targets: container,
-      alpha: 1,
-      y,
-      duration: 500,
-      delay: 200,
-      ease: "Power2"
     });
     return container;
   }
