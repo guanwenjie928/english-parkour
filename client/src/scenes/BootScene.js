@@ -78,20 +78,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
-    // 初始化 SoundGenerator（提前解锁 AudioContext）
-    SoundGenerator.unlock();
-
     const { width, height } = this.scale;
 
-    // 显示初始化状态（页面可能已经被 preload UI 占据）
-    // 清除 preload 中的 UI 元素，显示"初始化中"
+    // 清除 preload 中的 UI 元素
     this.children.removeAll(true);
 
+    // === 深色背景 ===
     this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
-    this.add.text(width / 2, height * 0.45, '正在初始化...', {
-      fontSize: '20px',
-      color: '#00d4ff',
-    }).setOrigin(0.5);
 
     // === 从跑步 sheet (512×256 = 4列×2行, 每格128×128) 逐帧裁剪 ===
     const runSheet = this.textures.get('run-sheet');
@@ -132,7 +125,6 @@ export class BootScene extends Phaser.Scene {
     // === 创建特效动画（从 vfx-strip 裁剪） ===
     const vfxStrip = this.textures.get('vfx-strip');
     if (vfxStrip) {
-      // electric-hit: 5帧竖排 256×256 each → frame 0-4 at y=0
       for (let i = 0; i < 5; i++) {
         vfxStrip.add(`electric_${i}`, 0, 0, i * 256, 256, 256);
       }
@@ -143,7 +135,6 @@ export class BootScene extends Phaser.Scene {
         repeat: 0,
       });
 
-      // shield-bubble: 5帧竖排 256×256 each → frame 0-4 at y=1280
       for (let i = 0; i < 5; i++) {
         vfxStrip.add(`shield_${i}`, 0, 0, 1280 + i * 256, 256, 256);
       }
@@ -155,9 +146,95 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    // 短暂停顿让用户看到"初始化完成"，然后过渡到菜单
-    this.time.delayedCall(200, () => {
+    // === 点击开始画面 ===
+    // 使用用户手势来解锁 AudioContext，符合浏览器自动播放策略
+    this.showStartScreen();
+  }
+
+  showStartScreen() {
+    const { width, height } = this.scale;
+
+    // 标题
+    const title = this.add.text(width / 2, height * 0.3, '英语跑酷', {
+      fontSize: '56px',
+      fontFamily: 'Arial Black',
+      color: '#00d4ff',
+      stroke: '#1a1a2e',
+      strokeThickness: 4,
+    }).setOrigin(0.5);
+
+    // 副标题
+    this.add.text(width / 2, height * 0.4, 'English Parkour', {
+      fontSize: '18px',
+      color: '#888888',
+    }).setOrigin(0.5);
+
+    // "点击开始"按钮
+    const btnWidth = 280;
+    const btnHeight = 60;
+    const btnY = height * 0.58;
+
+    const btnBg = this.add.rectangle(width / 2, btnY, btnWidth, btnHeight, 0x00d4ff, 0.9)
+      .setInteractive({ useHandCursor: true });
+    // 圆角效果 - 用 graphics 叠加
+    const btnBorder = this.add.graphics();
+    btnBorder.lineStyle(2, 0x00ffff, 1);
+    btnBorder.strokeRoundedRect(width / 2 - btnWidth / 2, btnY - btnHeight / 2, btnWidth, btnHeight, 15);
+
+    const btnText = this.add.text(width / 2, btnY, '点击开始', {
+      fontSize: '28px',
+      fontFamily: 'Arial Black',
+      color: '#1a1a2e',
+    }).setOrigin(0.5);
+
+    // 按钮容器
+    const btnContainer = this.add.container(0, 0);
+    btnContainer.add([btnBg, btnBorder, btnText]);
+
+    // 按钮呼吸动画（吸引点击）
+    this.tweens.add({
+      targets: btnContainer,
+      scaleX: 1.05,
+      scaleY: 1.05,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // 底部提示文字
+    this.add.text(width / 2, height * 0.75, '加载完毕后点击屏幕任意位置开始游戏', {
+      fontSize: '14px',
+      color: '#555555',
+    }).setOrigin(0.5);
+
+    // 版本标识（方便确认部署是否生效）
+    this.add.text(width / 2, height - 20, 'v1.0.2', {
+      fontSize: '12px',
+      color: '#333333',
+    }).setOrigin(0.5);
+
+    // 点击开始处理
+    const startGame = () => {
+      // 在用户手势内解锁 AudioContext（符合浏览器策略）
+      SoundGenerator.unlock();
       this.scene.start('MenuScene');
+    };
+
+    // 监听多种交互方式
+    btnBg.on('pointerdown', startGame);
+    this.input.keyboard.once('keydown-SPACE', startGame);
+    this.input.keyboard.once('keydown-ENTER', startGame);
+
+    // 标题入场动画
+    title.setAlpha(0);
+    title.setY(height * 0.25);
+    this.tweens.add({
+      targets: title,
+      alpha: 1,
+      y: height * 0.3,
+      duration: 600,
+      ease: 'Back.easeOut',
     });
   }
 }

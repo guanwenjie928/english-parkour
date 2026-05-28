@@ -28,8 +28,13 @@ export class MenuScene extends Phaser.Scene {
     // 多标签页检测
     this.checkDuplicateTab();
 
-    // 播放 BGM
-    this.soundGenerator.playBGM('menu');
+    // 播放 BGM（AudioContext 已在 BootScene 点击时解锁）
+    try {
+      this.soundGenerator.playBGM('menu');
+    } catch (e) {
+      // 音频失败不影响游戏渲染
+      console.warn('[MenuScene] BGM 播放失败，将跳过音频:', e.message);
+    }
   }
 
   createBackground() {
