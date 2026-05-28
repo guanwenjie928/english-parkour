@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================
-#  英语跑酷 Shmup 多人模式 — 一键部署脚本
-#  在服务器上执行: bash /root/english-parkour/deploy-shmup.sh
+#  英语跑酷 Shmup — 全自动部署脚本
+#  直接拷贝到 /root/english-parkour/ 后执行即可
+#  bash /root/english-parkour/deploy-shmup.sh
 # ============================================================
 set -euo pipefail
 
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[✓]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 err()  { echo -e "${RED}[✗]${NC} $1"; exit 1; }
@@ -18,92 +16,131 @@ WWW_DIR="/var/www/english-parkour"
 NGINX_CONF="/etc/nginx/sites-enabled/classroom-eval"
 
 echo "=========================================="
-echo "  英语跑酷 Shmup 多人模式部署"
+echo "  英语跑酷 Shmup 多人模式 全自动部署"
 echo "  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "=========================================="
 
-# ---- 1. 拉取最新代码 ----
+# ---- 0. 拉取最新代码 ----
 log "拉取最新代码..."
 cd "$PROJECT_DIR"
+git pull origin main 2>/dev/null || warn "git pull 失败（网络问题），使用现有代码继续"
 
-# 保存服务器特有的 vite.config.js 改动（base=/parkour/）
-if git diff --quiet client/vite.config.js 2>/dev/null; then
-  : # 无改动，无需 stash
+# ================================================================
+#  补丁 1/3: vite.config.js — 支持 VITE_BASE / VITE_OUTDIR 环境变量
+# ================================================================
+log "应用补丁: vite.config.js ..."
+cat > "$PROJECT_DIR/client/vite.config.js" << 'VEOF'
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  // base 优先级: GITHUB_PAGES=1 → './'  |  VITE_BASE=/parkour/ → '/parkour/'  |  默认 → '/english-parkour/'
+  base: process.env.GITHUB_PAGES ? './' : (process.env.VITE_BASE || '/english-parkour/'),
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': 'http://localhost:3000',
+      '/socket.io': {
+        target: 'ws://localhost:3000',
+        ws: true
+      }
+    }
+  },
+  build: {
+    outDir: process.env.VITE_OUTDIR || '../docs',
+    assetsDir: 'assets',
+    emptyOutDir: false,
+  }
+});
+VEOF
+
+# ================================================================
+#  补丁 2/3: NetworkShmupEngine.js — 添加 socket.io import
+# ================================================================
+log "应用补丁: NetworkShmupEngine.js ..."
+NETWORK_FILE="$PROJECT_DIR/client/src/engine/NetworkShmupEngine.js"
+# 检查第一行是否已有 import
+if head -1 "$NETWORK_FILE" | grep -q "import.*socket.io-client"; then
+  log "NetworkShmupEngine.js 已包含 import，跳过"
 else
-  warn "检测到 vite.config.js 本地修改，已 stash"
-  git stash push -m "deploy: auto-stash before pull" client/vite.config.js 2>/dev/null || true
+  # 在第一行注释后插入 import
+  sed -i '4a import { io } from '"'"'socket.io-client'"'"';' "$NETWORK_FILE"
+  log "已添加 import { io } from 'socket.io-client'"
 fi
 
-git pull origin main || err "git pull 失败，请手动处理冲突"
+# ================================================================
+#  补丁 3/3: main.js — 修复 isLocalMode 检测（CDN 竞态 bug）
+# ================================================================
+log "应用补丁: main.js ..."
+MAIN_FILE="$PROJECT_DIR/client/src/main.js"
+# 检查是否已经修复
+if grep -q "location.hostname === 'localhost'" "$MAIN_FILE"; then
+  log "main.js 已修复，跳过"
+else
+  OLD_PATTERN="const isLocalMode = typeof io === 'undefined' || urlParams.get('local') === '1';"
+  NEW_PATTERN="const isLocalMode = urlParams.get('local') === '1'
+  || location.hostname === 'localhost'
+  || location.hostname.includes('github.io');"
+  # 用 perl 做多行替换（sed 对多行不友好）
+  perl -i -pe "s/const isLocalMode = typeof io === 'undefined' \|\| urlParams\.get\('local'\) === '1';/const isLocalMode = urlParams.get('local') === '1'\n  || location.hostname === 'localhost'\n  || location.hostname.includes('github.io');/" "$MAIN_FILE"
+  log "已修复 isLocalMode 检测逻辑"
+fi
 
-# ---- 2. 构建前端 ----
-log "构建前端（base=/parkour/, outDir=dist）..."
+# ---- 构建前端 ----
+log "构建前端 (base=/parkour/, outDir=dist)..."
 cd "$PROJECT_DIR/client"
 npm install 2>&1 | tail -3
-
-# 清理旧构建
 rm -rf dist/
-
-# VITE_BASE=/parkour/  VITE_OUTDIR=dist → 构建到 client/dist/
 VITE_BASE=/parkour/ VITE_OUTDIR=dist npm run build 2>&1 | tail -8
 
-# 检查构建产物
 if [ ! -f "dist/index.html" ]; then
   err "构建失败：dist/index.html 不存在"
 fi
-log "构建成功 $(du -sh dist/index.html | cut -f1)"
+log "构建成功"
 
-# ---- 3. 部署静态文件到 Nginx ----
+# ---- 部署静态文件 ----
 log "部署静态文件到 $WWW_DIR ..."
 mkdir -p "$WWW_DIR"
 rm -rf "$WWW_DIR/assets" "$WWW_DIR/index.html" 2>/dev/null || true
 cp -r dist/* "$WWW_DIR/"
-log "静态文件已部署 ($(ls "$WWW_DIR" | wc -l) 个文件)"
+log "静态文件已部署"
 
-# ---- 4. 确保 socket.io 的 js 可加载 ----
-# 客户端 index.html 中已有条件加载逻辑：非本地模式自动加载 /socket.io/socket.io.js
-# Nginx /socket.io/ → proxy 到 3000 端口，由 Socket.io 服务端内置提供
-
-# ---- 5. Nginx: 添加 /shmup/socket.io/ 代理规则 ----
+# ---- Nginx /shmup/socket.io/ 代理 ----
 log "检查 Nginx 配置..."
 if [ -f "$NGINX_CONF" ]; then
   if ! grep -q "/shmup/socket.io/" "$NGINX_CONF"; then
     log "添加 /shmup/socket.io/ 代理规则..."
-
-    # 备份原配置
     cp "$NGINX_CONF" "${NGINX_CONF}.bak-$(date +%Y%m%d%H%M%S)"
 
-    # 在 "location /socket.io/" 行之前插入
-    sed -i '/^location \/socket\.io\/ {/i\
-# 英语跑酷 Shmup 多人模式 WebSocket 代理\
-location /shmup/socket.io/ {\
-    proxy_pass http://127.0.0.1:3000;\
-    proxy_http_version 1.1;\
-    proxy_set_header Upgrade $http_upgrade;\
-    proxy_set_header Connection "upgrade";\
-    proxy_set_header Host $host;\
-    proxy_set_header X-Real-IP $remote_addr;\
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\
-}\
-' "$NGINX_CONF"
+    SHMUP_BLOCK='
+# 英语跑酷 Shmup 多人模式 WebSocket
+location /shmup/socket.io/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+'
+    awk -v block="$SHMUP_BLOCK" '
+      /^location \/socket\.io\/ \{/ { print block; }
+      { print; }
+    ' "$NGINX_CONF" > "${NGINX_CONF}.tmp" && mv "${NGINX_CONF}.tmp" "$NGINX_CONF"
 
-    nginx -t 2>&1 || err "Nginx 配置语法错误，已自动备份: ${NGINX_CONF}.bak-*"
+    nginx -t 2>&1 || err "Nginx 配置语法错误，已备份"
     nginx -s reload
-    log "Nginx 已更新并重载"
+    log "Nginx 已重载"
   else
-    log "Nginx 已包含 /shmup/socket.io/ 规则，跳过"
+    log "Nginx 已有 /shmup/socket.io/ 规则"
   fi
-else
-  warn "未找到 Nginx 配置 $NGINX_CONF"
-  warn "请手动添加: location /shmup/socket.io/ { proxy_pass http://127.0.0.1:3000; ... }"
 fi
 
-# ---- 6. 服务端依赖 ----
+# ---- 服务端依赖 + 重启 ----
 log "安装服务端依赖..."
 cd "$PROJECT_DIR/server"
 npm install 2>&1 | tail -3
 
-# ---- 7. 重启 PM2 ----
 log "重启 PM2..."
 if pm2 list 2>/dev/null | grep -q "english-parkour"; then
   pm2 restart english-parkour
@@ -112,7 +149,7 @@ else
 fi
 pm2 save
 
-# ---- 8. 健康检查 ----
+# ---- 健康检查 ----
 sleep 3
 log "健康检查..."
 HEALTH=$(curl -s http://localhost:3000/api/health 2>/dev/null || echo '{"status":"unreachable"}')
@@ -121,25 +158,25 @@ echo "  $HEALTH"
 if echo "$HEALTH" | grep -q '"ok"'; then
   log "服务启动成功！"
 else
-  warn "服务可能未正常启动，查看最近日志:"
+  warn "查看日志: pm2 logs english-parkour --lines 15 --nostream"
   pm2 logs english-parkour --lines 15 --nostream 2>&1 || true
 fi
 
-# ---- 9. 验证 Shmup 房间创建 ----
-log "测试 /shmup 命名空间连接..."
-curl -s "http://localhost:3000/socket.io/?EIO=4&transport=polling" 2>/dev/null | head -c 100 && echo ""
-curl -s "http://localhost:3000/shmup/socket.io/?EIO=4&transport=polling" 2>/dev/null | head -c 100 && echo ""
-
+# ---- 验证 ----
 echo ""
 echo "=========================================="
-echo "  部署完成！"
+echo "  部署完成！验证清单："
 echo "=========================================="
 echo "  游戏入口:  http://124.220.226.95/parkour/"
 echo "  健康检查:  http://124.220.226.95/api/health"
-echo "  PM2 日志:  pm2 logs english-parkour"
 echo ""
-echo "  多人模式测试:"
-echo "    1. 打开 http://124.220.226.95/parkour/"
-echo "    2. 菜单页选择 MULTIPLAYER"
-echo "    3. 创建房间 → 分享房间码 → 同学加入"
+echo "  如果页面空白，F12 检查："
+echo "  1. Console 是否有 JS 错误"
+echo "  2. Network → socket.io 是否 101 握手"
+echo "  3. pm2 logs english-parkour"
+echo ""
+echo "  多人模式测试："
+echo "  1. 打开 http://124.220.226.95/parkour/"
+echo "  2. 菜单页进入多人模式"
+echo "  3. 创建房间 → 分享码 → 同学加入"
 echo "=========================================="
