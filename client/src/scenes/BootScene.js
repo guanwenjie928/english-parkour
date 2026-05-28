@@ -78,6 +78,8 @@ export class BootScene extends Phaser.Scene {
   create() {
     const { width: w, height: h } = this.scale;
     this.children.removeAll(true);
+    this.gameAssetsLoaded = true;
+    console.log('[BootScene] create');
 
     // 天空
     const steps = 30;
@@ -106,13 +108,7 @@ export class BootScene extends Phaser.Scene {
     }
 
     this._showStartScreen(w, h);
-    this._loadGameAssets();
-  }
-
-  _loadGameAssets() {
-    this.gameAssetsLoaded = true;
-    this.load.once('complete', () => console.log('[BootScene] ready'));
-    this.load.start();
+    console.log('[BootScene] ready');
   }
 
   _showStartScreen(w, h) {
