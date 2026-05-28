@@ -14,7 +14,7 @@
   <div id="game-container"></div>
   <script>
     // 本地模式不加载 socket.io（纯单机体验）
-    const isLocalMode = location.search.includes('local=1') || location.hostname === 'localhost';
+    const isLocalMode = location.search.includes('local=1') || location.hostname === 'localhost' || location.hostname.includes('github.io');
     if (!isLocalMode) {
       const script = document.createElement('script');
       script.src = '/socket.io/socket.io.js';
