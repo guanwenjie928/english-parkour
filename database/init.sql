@@ -156,3 +156,42 @@ INSERT INTO words (word, meaning, difficulty, challenge_type, blank_pattern, bla
 ('school', '学校', 2, 'cn_to_en', NULL, 0, '三年级'),
 ('teacher', '老师', 2, 'fill_blank', 't_a_h_r', 2, '三年级'),
 ('student', '学生', 3, 'fill_blank', 's_u_e_t', 3, '三年级');
+
+-- 四年级单词
+INSERT INTO words (word, meaning, difficulty, challenge_type, blank_pattern, blank_count, category) VALUES
+('computer', '电脑', 3, 'fill_blank', 'c_m_u_e_', 3, '四年级'),
+('bicycle', '自行车', 3, 'fill_blank', 'b_c_c_e', 3, '四年级'),
+('library', '图书馆', 3, 'fill_blank', 'l_b_a_y', 3, '四年级'),
+('medicine', '药', 3, 'fill_blank', 'm_d_c_n_', 4, '四年级'),
+('tomorrow', '明天', 3, 'fill_blank', 't_m_r_o_', 3, '四年级'),
+('yesterday', '昨天', 3, 'fill_blank', 'y_s_e_d_y', 4, '四年级'),
+('morning', '早上', 2, 'fill_blank', 'm_r_i_g', 2, '四年级'),
+('evening', '晚上', 2, 'fill_blank', 'e_e_i_g', 2, '四年级'),
+('country', '国家', 3, 'fill_blank', 'c_u_t_y', 3, '四年级'),
+('language', '语言', 3, 'fill_blank', 'l_n_u_g_', 4, '四年级');
+
+-- 五年级单词
+INSERT INTO words (word, meaning, difficulty, challenge_type, blank_pattern, blank_count, category) VALUES
+('knowledge', '知识', 4, 'fill_blank', 'k_o_l_d_e', 4, '五年级'),
+('exercise', '锻炼', 3, 'fill_blank', 'e_e_c_i_e', 4, '五年级'),
+('mountain', '山', 3, 'fill_blank', 'm_u_t_i_', 4, '五年级'),
+('weather', '天气', 3, 'fill_blank', 'w_a_h_r', 2, '五年级'),
+('between', '在...之间', 3, 'fill_blank', 'b_t_e_n', 3, '五年级'),
+('believe', '相信', 3, 'fill_blank', 'b_l_e_e', 3, '五年级'),
+('against', '反对', 3, 'fill_blank', 'a_a_n_t', 3, '五年级'),
+('general', '一般的', 4, 'fill_blank', 'g_n_r_l', 4, '五年级'),
+('foreign', '外国的', 3, 'fill_blank', 'f_r_e_g', 3, '五年级'),
+('journey', '旅行', 3, 'fill_blank', 'j_u_n_y', 3, '五年级');
+
+-- 六年级单词
+INSERT INTO words (word, meaning, difficulty, challenge_type, blank_pattern, blank_count, category) VALUES
+('discovery', '发现', 4, 'fill_blank', 'd_s_o_e_y', 4, '六年级'),
+('education', '教育', 4, 'fill_blank', 'e_u_a_i_n', 5, '六年级'),
+('scientist', '科学家', 4, 'fill_blank', 's_i_n_i_t', 4, '六年级'),
+('especially', '尤其', 4, 'fill_blank', 'e_p_c_a_y', 5, '六年级'),
+('necessary', '必要的', 4, 'fill_blank', 'n_c_s_a_y', 5, '六年级'),
+('different', '不同的', 4, 'fill_blank', 'd_f_e_e_t', 4, '六年级'),
+('important', '重要的', 4, 'fill_blank', 'i_p_r_a_t', 4, '六年级'),
+('wonderful', '精彩的', 4, 'fill_blank', 'w_n_e_f_l', 5, '六年级'),
+('following', '下列的', 4, 'fill_blank', 'f_l_o_i_g', 4, '六年级'),
+('situation', '情况', 4, 'fill_blank', 's_t_a_i_n', 5, '六年级');

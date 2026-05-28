@@ -1,160 +1,84 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const mysql = require('mysql2/promise');
 const cors = require('cors');
-const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+
+const { db } = require('./src/db');
+const { Logger } = require('./src/core/Logger');
+const { setupErrorBoundary } = require('./src/core/ErrorBoundary');
+const { registerShutdownHandlers } = require('./src/core/GracefulShutdown');
+const { setupGameSocket } = require('./src/socket/gameSocket');
+const apiRoutes = require('./src/routes/api');
+const { WordEngine } = require('./src/game/WordEngine');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, {
+  cors: { origin: '*' },
+  transports: ['websocket', 'polling'],
+});
 
 app.use(cors());
 app.use(express.json());
 
-// 数据库连接池
-const db = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'your_password',
-  database: 'english_parkour',
-  waitForConnections: true,
-  connectionLimit: 10
-});
-
-// 房间管理
+// 内存中的房间存储
 const rooms = new Map();
 
-// REST API
-app.post('/api/rooms', async (req, res) => {
-  // 创建房间逻辑
+// 初始化单词引擎
+const wordEngine = new WordEngine();
+
+// 启动时加载单词
+async function init() {
   try {
-    const { word_difficulty, word_category, challenge_type_ratio, duration, max_players } = req.body;
-    const roomId = uuidv4();
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-    await db.execute(
-      'INSERT INTO rooms (id, code, word_config, duration, max_players) VALUES (?, ?, ?, ?, ?)',
-      [roomId, code, JSON.stringify({ word_difficulty, word_category, challenge_type_ratio }), duration || 90, max_players || 8]
-    );
-
-    res.json({
-      room_id: roomId,
-      code: code,
-      ws_url: `wss://${req.headers.host}/game`,
-      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString()
-    });
+    await wordEngine.loadFromDB();
+    Logger.info('word_engine_loaded', { wordCount: wordEngine.byId.size });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    Logger.error('word_engine_load_failed', { error: err.message });
   }
-});
+}
 
-app.post('/api/rooms/:code/join', async (req, res) => {
-  // 加入房间逻辑
-  try {
-    const { player_name } = req.body;
-    const [rooms] = await db.execute('SELECT * FROM rooms WHERE code = ? AND status = "waiting"', [req.params.code]);
+init();
 
-    if (rooms.length === 0) {
-      return res.status(404).json({ error: '房间不存在或已开始' });
-    }
+// API 路由
+app.use('/api', apiRoutes(rooms, wordEngine));
+app.use('/api/words/import', apiRoutes.importRoutes());
 
-    const room = rooms[0];
-    const [players] = await db.execute('SELECT COUNT(*) as count FROM room_players WHERE room_id = ?', [room.id]);
+// 静态文件（生产环境）
+app.use(express.static(path.join(__dirname, '../client/dist')));
 
-    if (players[0].count >= room.max_players) {
-      return res.status(400).json({ error: '房间已满' });
-    }
+// 错误兜底
+const { safeHandler } = setupErrorBoundary(server, io, rooms);
 
-    const trackNumber = players[0].count + 1;
-    const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan'];
-    const colorTheme = colors[trackNumber - 1];
+// WebSocket 设置
+setupGameSocket(io, rooms, wordEngine);
 
-    const [result] = await db.execute(
-      'INSERT INTO room_players (room_id, player_name, track_number, color_theme) VALUES (?, ?, ?, ?)',
-      [room.id, player_name, trackNumber, colorTheme]
-    );
-
-    res.json({
-      player_id: result.insertId,
-      track: trackNumber,
-      color: colorTheme,
-      room_status: room.status
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/rooms/:code/export', async (req, res) => {
-  // Excel导出逻辑
-  try {
-    const XLSX = require('xlsx');
-    const [rooms] = await db.execute('SELECT * FROM rooms WHERE code = ?', [req.params.code]);
-
-    if (rooms.length === 0) {
-      return res.status(404).json({ error: '房间不存在' });
-    }
-
-    const [reportData] = await db.execute('SELECT * FROM v_room_report WHERE room_id = ?', [rooms[0].id]);
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(reportData);
-    XLSX.utils.book_append_sheet(wb, ws, '答题报表');
-
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=英语跑酷_${new Date().toISOString().split('T')[0]}_${req.params.code}.xlsx`);
-    res.send(buf);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// WebSocket
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-
-  socket.on('join_room', async (data) => {
-    // 加入房间处理
-    const { room_code, player_name } = data;
-    socket.join(room_code);
-    socket.to(room_code).emit('player_joined', { player_name });
-  });
-
-  socket.on('answer', async (data) => {
-    // 答题处理
-    const { word_id, answer, time_ms } = data;
-    // 校验答案逻辑
-    // 广播结果
-  });
-
-  socket.on('use_item', async (data) => {
-    // 道具使用处理
-    const { item_type, target_track } = data;
-    // 校验并广播
-  });
-
-  socket.on('disconnect', () => {
-    // 断线处理
-    console.log('Client disconnected:', socket.id);
-  });
-});
-
-// 游戏循环定时器
+// 房间回收定时器（30分钟 TTL）
+const ROOM_TTL = 30 * 60 * 1000;
 setInterval(() => {
-  // 50ms广播房间状态
-  rooms.forEach((room, roomId) => {
-    if (room.status === 'playing') {
-      io.to(roomId).emit('room_state', {
-        players: room.players,
-        remaining: room.remainingTime
-      });
+  const now = Date.now();
+  let cleaned = 0;
+  rooms.forEach((room, id) => {
+    const createdAt = room.createdAt || now;
+    const shouldClean =
+      (room.status === 'ended' && now - createdAt > ROOM_TTL) ||
+      (room.status === 'waiting' && room.players.size === 0 && now - createdAt > ROOM_TTL);
+
+    if (shouldClean) {
+      room.cleanup();
+      rooms.delete(id);
+      cleaned++;
     }
   });
-}, 50);
+  if (cleaned > 0) {
+    Logger.info('room_recycle', { cleaned, remaining: rooms.size });
+  }
+}, 5 * 60 * 1000); // 每5分钟检查一次
 
-server.listen(3000, () => {
-  console.log('Server running on port 3000');
+// 注册优雅关闭
+registerShutdownHandlers(server, rooms);
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  Logger.info('server_started', { port: PORT });
 });

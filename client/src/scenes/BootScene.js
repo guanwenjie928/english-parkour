@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SoundGenerator } from '../utils/SoundGenerator.js';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -6,42 +7,98 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    // 加载基础资源
-    this.load.image('logo', 'assets/ui/logo.png');
-    this.load.image('btn-start', 'assets/ui/btn-start.png');
+    // === 角色精灵图（单张 sheet 替代 8 张独立帧） ===
+    this.load.image('run-sheet', 'assets/characters/run-sheet.png');
+    this.load.image('pose-sheet', 'assets/characters/pose-sheet.png');
 
-    // 加载角色序列帧
-    for (let i = 1; i <= 8; i++) {
-      this.load.image(`run_${i}`, `assets/characters/run_${String(i).padStart(2, '0')}.png`);
-    }
+    // === 道具条带（单张 320×64 含 5 个道具图标） ===
+    this.load.image('items-strip', 'assets/items/items-strip.png');
 
-    // 加载道具
-    this.load.image('item-rocket', 'assets/items/rocket.png');
-    this.load.image('item-electric', 'assets/items/electric.png');
-    this.load.image('item-banana', 'assets/items/banana.png');
-    this.load.image('item-shield', 'assets/items/shield.png');
-
-    // 加载背景
+    // === 地图背景（城市 P0） ===
     this.load.image('bg-city-far', 'assets/backgrounds/city-far.png');
     this.load.image('bg-city-mid', 'assets/backgrounds/city-mid.png');
     this.load.image('bg-city-near', 'assets/backgrounds/city-near.png');
 
-    // 加载音效
-    this.load.audio('sfx-correct', 'assets/audio/sfx_correct.mp3');
-    this.load.audio('sfx-wrong', 'assets/audio/sfx_wrong.mp3');
-    this.load.audio('sfx-item', 'assets/audio/sfx_item.mp3');
-    this.load.audio('bgm-menu', 'assets/audio/bgm_menu.mp3');
+    // === 特效条带 ===
+    this.load.image('vfx-strip', 'assets/vfx/vfx-strip.png');
+
+    // === UI Atlas ===
+    this.load.image('ui-atlas', 'assets/ui/ui-atlas.png');
+
+    // === 障碍物 ===
+    this.load.image('obstacles-strip', 'assets/obstacles/obstacles-strip.png');
+
+    // 音效: 全部由 SoundGenerator 程序化合成，零 mp3 文件
+    // SoundGenerator.get() 惰性初始化，首次 play() 时自动创建 AudioContext
   }
 
   create() {
-    // 创建动画
+    // 初始化 SoundGenerator（提前解锁 AudioContext）
+    SoundGenerator.unlock();
+
+    // === 从跑步 sheet (512×256 = 4列×2行, 每格128×128) 逐帧裁剪 ===
+    const runSheet = this.textures.get('run-sheet');
+    if (runSheet) {
+      for (let i = 0; i < 8; i++) {
+        const col = i % 4;
+        const row = (i / 4) | 0;
+        runSheet.add(`run_${i + 1}`, 0, col * 128, row * 128, 128, 128);
+      }
+    }
+
+    // === 从姿势 sheet (640×128 = 5列×1行, 每格128×128) 裁剪 ===
+    const poseSheet = this.textures.get('pose-sheet');
+    const poseNames = ['idle', 'slide', 'stun', 'victory', 'shield'];
+    if (poseSheet) {
+      poseNames.forEach((name, i) => {
+        poseSheet.add(`pose_${name}`, 0, i * 128, 0, 128, 128);
+      });
+    }
+
+    // === 从道具条带 (320×64 = 5列×1行, 每格64×64) 裁剪 ===
+    const itemsStrip = this.textures.get('items-strip');
+    const itemNames = ['rocket', 'electric', 'banana', 'shield', 'magnet'];
+    if (itemsStrip) {
+      itemNames.forEach((name, i) => {
+        itemsStrip.add(`item-${name}`, 0, i * 64, 0, 64, 64);
+      });
+    }
+
+    // === 创建跑步动画 ===
     this.anims.create({
       key: 'run',
-      frames: Array.from({length: 8}, (_, i) => ({ key: `run_${i+1}` })),
+      frames: Array.from({ length: 8 }, (_, i) => ({ key: 'run-sheet', frame: `run_${i + 1}` })),
       frameRate: 12,
-      repeat: -1
+      repeat: -1,
     });
 
+    // === 创建特效动画（从 vfx-strip 裁剪） ===
+    const vfxStrip = this.textures.get('vfx-strip');
+    if (vfxStrip) {
+      // electric-hit: 5帧竖排 256×256 each → frame 0-4 at y=0
+      for (let i = 0; i < 5; i++) {
+        vfxStrip.add(`electric_${i}`, 0, 0, i * 256, 256, 256);
+      }
+      this.anims.create({
+        key: 'electric-hit',
+        frames: Array.from({ length: 5 }, (_, i) => ({ key: 'vfx-strip', frame: `electric_${i}` })),
+        frameRate: 10,
+        repeat: 0,
+      });
+
+      // shield-bubble: 5帧竖排 256×256 each → frame 0-4 at y=1280
+      for (let i = 0; i < 5; i++) {
+        vfxStrip.add(`shield_${i}`, 0, 0, 1280 + i * 256, 256, 256);
+      }
+      this.anims.create({
+        key: 'shield-bubble',
+        frames: Array.from({ length: 5 }, (_, i) => ({ key: 'vfx-strip', frame: `shield_${i}` })),
+        frameRate: 10,
+        repeat: 0,
+      });
+    }
+
+    // 过渡到菜单场景
     this.scene.start('MenuScene');
   }
 }
