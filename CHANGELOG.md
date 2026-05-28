@@ -76,8 +76,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machines with lookup-table dispatch (no switch/if-else chains)
 - Comprehensive inline documentation and JSDoc
 
+## [0.3.0] — 2026-05-28
+
+### Added — 单人本地模式 + 菜单改造
+- **本地游戏引擎** — 零服务器依赖，纯浏览器运行
+  - `WordBank.js` — 静态单词数据（40词），预索引结构
+  - `AIBot.js` — 4个AI机器人（Alice/Bob/Carol/Dave），独立答题逻辑
+  - `LocalGameEngine.js` — 完整游戏状态机 + tick循环 + 道具系统
+- **单人模式入口** — 菜单新增「快速开始」按钮
+  - 跳过房间码，直接启动本地练习
+  - 1真人 + 4AI对手同场竞技
+  - AI自动答题、使用道具、追赶机制
+- **全新菜单界面**
+  - 科技感渐变背景（深蓝到紫）+ 网格线装饰
+  - 动态Logo（图片优先，文字回退）
+  - 半透明面板 + 发光边框
+  - 浮动角色装饰动画
+  - 按钮呼吸效果 + 悬停缩放
+- **本地/联网自动检测**
+  - `typeof io === 'undefined'` 自动切换 LocalGameEngine
+  - 多标签页检测在本地模式自动跳过
+  - URL参数 `?local=1` 强制本地模式
+- **GitHub Pages 部署配置**
+  - `vite.config.js` 支持 `base: './'` 相对路径
+  - `outDir: '../docs'` 输出到 docs/ 目录
+
+### Modified
+- `MenuScene.js` — 完全重写，新UI布局 + 快速开始按钮
+- `LobbyScene.js` — 适配本地模式（SOLO房间显示"练习模式"）
+- `BootScene.js` — 加载新菜单素材
+- `main.js` — 本地/联网模式检测逻辑
+- `index.html` — 条件加载 socket.io
+
 ### Repository
-- Initial commit: project scaffold from `english-parkour.zip`
-- Git repository initialized at `english-parkour/`
-- Branch strategy: `main` (stable) + feature branches per update phase
-- All 35+ planned files created/modified
+- GitHub: https://github.com/guanwenjie928/english-parkour
