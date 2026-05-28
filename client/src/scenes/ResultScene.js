@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { SoundGenerator } from '../utils/SoundGenerator.js';
-import { PLAYER_COLORS } from '../utils/ColorConfig.js';
+import { EIGHT_BIT, drawPixelBorder, PLAYER_COLORS } from '../utils/ColorConfig.js';
+
+const PX = EIGHT_BIT;
+const FONT = 'Press Start 2P';
+const FONT_CN = 'Arial Black';
 
 export class ResultScene extends Phaser.Scene {
   constructor() {
@@ -15,21 +19,38 @@ export class ResultScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.soundGenerator = SoundGenerator.get();
 
-    // 停止游戏BGM，播放胜利BGM
     this.soundGenerator.stopBGM();
     this.soundGenerator.playBGM('final');
     this.soundGenerator.play('victory');
 
-    // 背景
-    this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
+    // 纯色暖棕背景
+    this.add.rectangle(width / 2, height / 2, width, height, PX.BG_DARK);
 
-    // 标题
-    this.add.text(width / 2, height * 0.12, '🎉 比赛结束!', {
-      fontSize: '64px',
-      fontFamily: 'Arial Black',
-      color: '#ffffff',
-      stroke: '#ffdd44',
-      strokeThickness: 6,
+    // 像素网格装饰
+    const gridGfx = this.add.graphics();
+    gridGfx.lineStyle(1, PX.BG_MID, 0.15);
+    for (let x = 0; x < width; x += 40) {
+      gridGfx.lineBetween(x, 0, x, height);
+    }
+    for (let y = 0; y < height; y += 40) {
+      gridGfx.lineBetween(0, y, width, y);
+    }
+
+    // 外框
+    const outerGfx = this.add.graphics();
+    drawPixelBorder(outerGfx, 16, 16, width - 32, height - 32, PX.BG_LIGHT, 2);
+
+    // 标题（无 emoji，纯像素文字）
+    this.add.text(width / 2, height * 0.08, 'GAME  OVER', {
+      fontSize: '28px',
+      fontFamily: FONT,
+      color: '#' + PX.HIGHLIGHT.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5);
+
+    this.add.text(width / 2, height * 0.14, '比赛结束!', {
+      fontSize: '18px',
+      fontFamily: FONT_CN,
+      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
 
     // 排名列表
@@ -38,59 +59,79 @@ export class ResultScene extends Phaser.Scene {
     // 按钮
     this.createButtons();
 
-    // 烟花特效
+    // 烟花特效（简化，暖色调）
     this.createFireworks();
   }
 
   createRankingList() {
     const { width, height } = this.scale;
-    const startY = height * 0.28;
-    const itemHeight = 70;
+    const startY = height * 0.24;
+    const itemHeight = 62;
 
     this.rankings.forEach((player, index) => {
       const y = startY + index * itemHeight;
-      const isMe = player.socketId === window.network.socket.id;
+      const isMe = player.socketId === window.network?.socket?.id;
+      const slotW = 540;
+      const slotX = (width - slotW) / 2;
 
-      // 背景条（自己高亮）
-      const bgColor = isMe ? 0x3a3a6e : (index % 2 === 0 ? 0x2a2a4e : 0x252545);
-      this.add.rectangle(width / 2, y, 600, itemHeight - 8, bgColor);
+      // 背景条
+      const bgColor = isMe ? PX.BG_LIGHT : (index % 2 === 0 ? PX.BG_MID : 0x352518);
+      const bg = this.add.rectangle(width / 2, y + itemHeight / 2, slotW, itemHeight - 6, bgColor, 0.95);
+      if (isMe) {
+        const bgBorder = this.add.graphics();
+        drawPixelBorder(bgBorder, slotX, y, slotW, itemHeight - 6, PX.HIGHLIGHT, 2);
+      }
 
-      // 奖牌
-      const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
-      const medalColor = medalColors[index] || '#444444';
-      const medalText = index < 3 ? ['🥇', '🥈', '🥉'][index] : `${index + 1}`;
+      // 奖牌：像素方块（金/银/铜色）
+      const medalColors = [0xf0d080, 0xc0c0c0, 0xcd7f32]; // 金银铜
+      const medalColor = medalColors[index] || PX.SECONDARY;
+      const medalX = slotX + 40;
+      const medalSize = 22;
 
-      this.add.circle(120, y, 28, Phaser.Display.Color.HexStringToColor(medalColor).color)
-        .setStrokeStyle(3, 0xffffff);
+      const medalGfx = this.add.graphics();
+      medalGfx.fillStyle(medalColor, 1);
+      medalGfx.fillRect(medalX - medalSize / 2, y + itemHeight / 2 - medalSize / 2, medalSize, medalSize);
+      drawPixelBorder(medalGfx,
+        medalX - medalSize / 2 - 2, y + itemHeight / 2 - medalSize / 2 - 2,
+        medalSize + 4, medalSize + 4, 0xffffff, 1);
 
-      this.add.text(120, y, medalText, {
-        fontSize: index < 3 ? '28px' : '20px',
-        fontFamily: 'Arial Black',
-        color: index < 3 ? '#1a1a2e' : '#888888',
+      // 排名数字
+      this.add.text(medalX, y + itemHeight / 2, `${index + 1}`, {
+        fontSize: '14px',
+        fontFamily: FONT,
+        color: index < 3 ? '#' + PX.TEXT_DARK.toString(16).padStart(6, '0') : '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
       }).setOrigin(0.5);
 
-      // 颜色圆点
+      // 颜色方块（代替圆点）
       const color = PLAYER_COLORS[player.trackNumber - 1] || PLAYER_COLORS[0];
-      this.add.circle(180, y, 12, color.tint);
+      const dotX = medalX + 40;
+      const dotSize = 12;
+      const dotGfx = this.add.graphics();
+      dotGfx.fillStyle(color.tint, 1);
+      dotGfx.fillRect(dotX - dotSize / 2, y + itemHeight / 2 - dotSize / 2, dotSize, dotSize);
+      drawPixelBorder(dotGfx,
+        dotX - dotSize / 2 - 1, y + itemHeight / 2 - dotSize / 2 - 1,
+        dotSize + 2, dotSize + 2, 0xffffff, 1);
 
       // 姓名
-      this.add.text(210, y, player.name, {
-        fontSize: '24px',
-        color: '#ffffff',
-        fontFamily: 'Arial',
+      this.add.text(dotX + 20, y + itemHeight / 2, player.name, {
+        fontSize: '18px',
+        fontFamily: FONT_CN,
+        color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
       }).setOrigin(0, 0.5);
 
       // 进度
-      this.add.text(width - 150, y, `${player.progress.toFixed(1)}%`, {
-        fontSize: '22px',
-        color: '#00d4ff',
-        fontFamily: 'Arial Black',
+      this.add.text(slotX + slotW - 120, y + itemHeight / 2, `${player.progress.toFixed(1)}%`, {
+        fontSize: '16px',
+        fontFamily: FONT_CN,
+        color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
       }).setOrigin(1, 0.5);
 
       // 正确数
-      this.add.text(width - 80, y, `✓ ${player.correctCount || 0}`, {
-        fontSize: '16px',
-        color: '#44dd44',
+      this.add.text(slotX + slotW - 30, y + itemHeight / 2, `OK:${player.correctCount || 0}`, {
+        fontSize: '10px',
+        fontFamily: FONT,
+        color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
       }).setOrigin(0.5);
     });
   }
@@ -99,59 +140,69 @@ export class ResultScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     // 再来一局
-    const restartBtn = this.add.rectangle(width / 2 - 130, height * 0.88, 220, 60, 0x00d4ff)
+    const btn1X = width / 2 - 130;
+    const btnY = height * 0.88;
+    const btnW = 200;
+    const btnH = 50;
+
+    const restartBtn = this.add.rectangle(btn1X, btnY, btnW, btnH, PX.PRIMARY)
       .setInteractive({ useHandCursor: true });
 
-    this.add.text(width / 2 - 130, height * 0.88, '再来一局', {
-      fontSize: '28px',
-      fontFamily: 'Arial Black',
-      color: '#1a1a2e',
+    const rBorder = this.add.graphics();
+    drawPixelBorder(rBorder, btn1X - btnW / 2 - 3, btnY - btnH / 2 - 3, btnW + 6, btnH + 6, 0x5a9e38, 2);
+
+    this.add.text(btn1X, btnY, '再来一局', {
+      fontSize: '16px',
+      fontFamily: FONT_CN,
+      color: '#' + PX.TEXT_DARK.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
 
     restartBtn.on('pointerdown', () => {
       this.soundGenerator.play('click');
       this.scene.start('MenuScene');
     });
-    restartBtn.on('pointerover', () => restartBtn.setScale(1.05));
-    restartBtn.on('pointerout', () => restartBtn.setScale(1));
+    restartBtn.on('pointerover', () => restartBtn.setFillStyle(PX.HIGHLIGHT));
+    restartBtn.on('pointerout', () => restartBtn.setFillStyle(PX.PRIMARY));
 
     // 退出
-    const exitBtn = this.add.rectangle(width / 2 + 130, height * 0.88, 220, 60, 0x3a3a5e)
+    const btn2X = width / 2 + 130;
+    const exitBtn = this.add.rectangle(btn2X, btnY, btnW, btnH, PX.SECONDARY)
       .setInteractive({ useHandCursor: true });
 
-    this.add.text(width / 2 + 130, height * 0.88, '退出', {
-      fontSize: '28px',
-      color: '#ffffff',
+    const eBorder = this.add.graphics();
+    drawPixelBorder(eBorder, btn2X - btnW / 2 - 3, btnY - btnH / 2 - 3, btnW + 6, btnH + 6, PX.BG_LIGHT, 1);
+
+    this.add.text(btn2X, btnY, '退  出', {
+      fontSize: '16px',
+      fontFamily: FONT_CN,
+      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
 
     exitBtn.on('pointerdown', () => {
       this.soundGenerator.play('click');
       window.location.reload();
     });
-    exitBtn.on('pointerover', () => exitBtn.setScale(1.05));
-    exitBtn.on('pointerout', () => exitBtn.setScale(1));
+    exitBtn.on('pointerover', () => exitBtn.setFillStyle(PX.HIGHLIGHT));
+    exitBtn.on('pointerout', () => exitBtn.setFillStyle(PX.SECONDARY));
   }
 
   createFireworks() {
-    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
+    const colors = [PX.HIGHLIGHT, PX.PRIMARY, PX.ACCENT, PX.ERROR, PX.GOLD, PX.MINT];
 
-    for (let i = 0; i < 8; i++) {
-      this.time.delayedCall(i * 400, () => {
+    for (let i = 0; i < 6; i++) {
+      this.time.delayedCall(i * 500, () => {
         const x = Phaser.Math.Between(100, this.scale.width - 100);
-        const y = Phaser.Math.Between(100, this.scale.height / 2);
+        const y = Phaser.Math.Between(80, this.scale.height * 0.35);
         const color = Phaser.Math.RND.pick(colors);
-
-        // 创建爆炸粒子效果
         this.createExplosion(x, y, color);
       });
     }
 
-    // 循环烟花
     this.time.addEvent({
-      delay: 3000,
+      delay: 3500,
       callback: () => {
         const x = Phaser.Math.Between(100, this.scale.width - 100);
-        const y = Phaser.Math.Between(100, this.scale.height / 2);
+        const y = Phaser.Math.Between(80, this.scale.height * 0.35);
         const color = Phaser.Math.RND.pick(colors);
         this.createExplosion(x, y, color);
       },
@@ -160,15 +211,16 @@ export class ResultScene extends Phaser.Scene {
   }
 
   createExplosion(x, y, color) {
-    // 使用图形创建简单的爆炸效果
     const particles = [];
-    const particleCount = 12;
+    const particleCount = 10;
 
     for (let i = 0; i < particleCount; i++) {
       const angle = (i / particleCount) * Math.PI * 2;
-      const speed = Phaser.Math.Between(3, 8);
+      const speed = Phaser.Math.Between(3, 7);
 
-      const particle = this.add.circle(x, y, Phaser.Math.Between(4, 8), color);
+      // 像素方块粒子
+      const size = Phaser.Math.Between(3, 6);
+      const particle = this.add.rectangle(x, y, size, size, color);
       particle.velocityX = Math.cos(angle) * speed;
       particle.velocityY = Math.sin(angle) * speed;
       particle.life = 1.0;
@@ -176,14 +228,13 @@ export class ResultScene extends Phaser.Scene {
       particles.push(particle);
     }
 
-    // 动画更新
     const updateParticles = () => {
       let alive = false;
       particles.forEach((p) => {
         if (p.life > 0) {
           p.x += p.velocityX;
           p.y += p.velocityY;
-          p.velocityY += 0.2; // 重力
+          p.velocityY += 0.15;
           p.life -= 0.02;
           p.alpha = p.life;
           p.scale = p.life;

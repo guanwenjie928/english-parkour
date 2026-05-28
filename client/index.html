@@ -6,10 +6,20 @@
   <title>英语跑酷课堂游戏</title>
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="shortcut icon" href="favicon.ico">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #1a1a2e; }
+    body { overflow: hidden; background: #2b1e10; }
+    @font-face {
+      font-family: 'PixelChinese';
+      src: local('SimHei'), local('Microsoft YaHei'), local('Noto Sans SC');
+      /* 中文字符回退：系统黑体提供可读性，尺寸按像素字体比例缩小 */
+    }
     #game-container { width: 100vw; height: 100vh; }
+    /* 像素字体全局可用 */
+    :root {
+      --font-pixel: 'Press Start 2P', 'PixelChinese', monospace;
+    }
   </style>
 </head>
 <body>

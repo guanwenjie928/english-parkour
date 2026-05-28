@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { SoundGenerator } from '../utils/SoundGenerator.js';
-import { PLAYER_COLORS } from '../utils/ColorConfig.js';
+import { EIGHT_BIT, drawPixelBorder, PLAYER_COLORS } from '../utils/ColorConfig.js';
+
+const PX = EIGHT_BIT;
+const FONT = 'Press Start 2P';
+const FONT_CN = 'Arial Black';
 
 export class LobbyScene extends Phaser.Scene {
   constructor() {
@@ -19,55 +23,69 @@ export class LobbyScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.soundGenerator = SoundGenerator.get();
 
-    // 背景
-    this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
+    // 纯色暖棕背景
+    this.add.rectangle(width / 2, height / 2, width, height, PX.BG_DARK);
+
+    // 像素网格装饰
+    const gridGfx = this.add.graphics();
+    gridGfx.lineStyle(1, PX.BG_MID, 0.2);
+    for (let x = 0; x < width; x += 40) {
+      gridGfx.lineBetween(x, 0, x, height);
+    }
+    for (let y = 0; y < height; y += 40) {
+      gridGfx.lineBetween(0, y, width, y);
+    }
+
+    // 外框装饰
+    const outerGfx = this.add.graphics();
+    drawPixelBorder(outerGfx, 16, 16, width - 32, height - 32, PX.BG_LIGHT, 2);
+
+    // 房间码标签
+    this.add.text(width / 2, height * 0.10, 'ROOM  CODE', {
+      fontSize: '9px',
+      fontFamily: FONT,
+      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5);
 
     // 房间码大标题
-    this.add.text(width / 2, height * 0.15, '房间号', {
-      fontSize: '32px',
-      color: '#aaaaaa',
+    this.roomCodeText = this.add.text(width / 2, height * 0.18, this.roomCode, {
+      fontSize: '56px',
+      fontFamily: FONT,
+      color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
 
-    this.roomCodeText = this.add.text(width / 2, height * 0.25, this.roomCode, {
-      fontSize: '96px',
-      fontFamily: 'Arial Black',
-      color: '#00d4ff',
-      stroke: '#ffffff',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
-
-    // 房间码闪烁动画（吸引注意）
+    // 闪烁动画（alpha 闪烁，像素感）
     this.tweens.add({
       targets: this.roomCodeText,
-      scaleX: 1.05,
-      scaleY: 1.05,
-      duration: 500,
+      alpha: 0.55,
+      duration: 700,
       yoyo: true,
       repeat: -1,
-      ease: 'Sine.easeInOut',
+      ease: 'Linear',
     });
 
     // 提示文字
-    this.add.text(width / 2, height * 0.38, '告诉其他同学房间号，让他们加入！', {
-      fontSize: '20px',
-      color: '#888888',
+    this.hintText = this.add.text(width / 2, height * 0.26, '告诉其他同学房间号，让他们加入！', {
+      fontSize: '14px',
+      fontFamily: FONT_CN,
+      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
 
-    // 玩家列表区域
+    // 玩家列表
     this.createPlayerList();
 
     // 准备/开始按钮
     this.createActionButton();
 
-    // 老师模式切换
+    // 老师模式
     if (this.isTeacher) {
       this.createTeacherControls();
     }
 
-    // 注册网络事件
+    // 网络事件
     this.setupNetworkListeners();
 
-    // 本地模式：直接显示玩家列表（AI 已加入）
+    // 本地模式
     if (this.isLocal) {
       setTimeout(() => {
         window.network.requestPlayerList();
@@ -78,56 +96,69 @@ export class LobbyScene extends Phaser.Scene {
 
     // 单人模式提示
     if (this.isLocal) {
-      this.add.text(width / 2, height * 0.38, '与 4 个 AI 对手一起练习！', {
-        fontSize: '20px',
-        color: '#44dd44',
-      }).setOrigin(0.5);
-
-      // SOLO 模式隐藏房间码，显示练习模式
+      this.hintText.setText('与 4 个 AI 对手一起练习！');
+      this.hintText.setColor('#' + PX.PRIMARY.toString(16).padStart(6, '0'));
       this.roomCodeText.setText('练习模式');
-      this.roomCodeText.setFontSize('48px');
+      this.roomCodeText.setFontSize('32px');
     }
   }
 
   createPlayerList() {
     const { width, height } = this.scale;
-    const startY = height * 0.48;
-    const slotHeight = 60;
-    const slotGap = 10;
+    const startY = height * 0.34;
+    const slotHeight = 52;
+    const slotGap = 8;
 
     this.playerSlots = [];
 
     for (let i = 0; i < 8; i++) {
       const y = startY + i * (slotHeight + slotGap);
+      const slotW = 420;
+      const slotX = (width - slotW) / 2;
 
-      // 槽位背景
-      const bg = this.add.rectangle(width / 2, y, 400, slotHeight, 0x2a2a4e)
-        .setStrokeStyle(2, 0x3a3a5e);
+      // 槽位背景（直角矩形）
+      const bg = this.add.rectangle(width / 2, y + slotHeight / 2, slotW, slotHeight, PX.BG_MID, 0.9);
 
-      // 颜色圆点
-      const colorDot = this.add.circle(width / 2 - 170, y, 15, PLAYER_COLORS[i].tint);
+      // 像素边框
+      const border = this.add.graphics();
+      drawPixelBorder(border, slotX, y, slotW, slotHeight, PX.BG_LIGHT, 1);
+
+      // 颜色方块（代替圆点）
+      const color = PLAYER_COLORS[i];
+      const dotX = slotX + 24;
+      const dotY = y + slotHeight / 2;
+      const dotSize = 14;
+      const dotGfx = this.add.graphics();
+      dotGfx.fillStyle(color.tint, 1);
+      dotGfx.fillRect(dotX - dotSize / 2, dotY - dotSize / 2, dotSize, dotSize);
+      // 方块边框
+      drawPixelBorder(dotGfx, dotX - dotSize / 2 - 2, dotY - dotSize / 2 - 2, dotSize + 4, dotSize + 4, 0xffffff, 1);
 
       // 跑道编号
-      this.add.text(width / 2 - 130, y, `${i + 1}号`, {
+      this.add.text(dotX + 20, dotY, `${i + 1}`, {
         fontSize: '16px',
-        color: '#888888',
+        fontFamily: FONT_CN,
+        color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
       }).setOrigin(0, 0.5);
 
-      // 玩家名（初始为空）
-      const nameText = this.add.text(width / 2 - 80, y, '等待加入...', {
-        fontSize: '20px',
-        color: '#666666',
+      // 玩家名
+      const nameText = this.add.text(dotX + 60, dotY, '等待加入...', {
+        fontSize: '16px',
+        fontFamily: FONT_CN,
+        color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
       }).setOrigin(0, 0.5);
 
       // 准备状态
-      const readyText = this.add.text(width / 2 + 140, y, '', {
-        fontSize: '16px',
-        color: '#44dd44',
-      }).setOrigin(0.5);
+      const readyText = this.add.text(slotX + slotW - 30, dotY, '', {
+        fontSize: '11px',
+        fontFamily: FONT,
+        color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
+      }).setOrigin(1, 0.5);
 
       this.playerSlots.push({
         bg,
-        colorDot,
+        border,
+        dotGfx,
         nameText,
         readyText,
         trackNumber: i + 1,
@@ -139,41 +170,58 @@ export class LobbyScene extends Phaser.Scene {
   createActionButton() {
     const { width, height } = this.scale;
 
-    const btnY = height * 0.9;
-    const btnColor = this.isTeacher ? 0x44dd44 : 0x00d4ff;
-    const btnText = this.isTeacher ? '开始游戏' : '准备';
+    const btnY = height * 0.90;
+    const btnW = 240;
+    const btnH = 54;
+    const btnColor = this.isTeacher ? PX.PRIMARY : PX.PRIMARY;
+    const btnText = this.isTeacher ? '开始游戏' : '准  备';
+    const btnX = width / 2 - btnW / 2;
+    const btnCY = btnY - btnH / 2;
 
-    this.actionBtn = this.add.rectangle(width / 2, btnY, 240, 70, btnColor)
+    this.actionBtn = this.add.rectangle(width / 2, btnY, btnW, btnH, btnColor)
       .setInteractive({ useHandCursor: true });
 
+    // 像素边框
+    this.actionBtnBorder = this.add.graphics();
+    drawPixelBorder(this.actionBtnBorder, btnX - 3, btnCY - 3, btnW + 6, btnH + 6, 0x5a9e38, 2);
+
     this.actionBtnText = this.add.text(width / 2, btnY, btnText, {
-      fontSize: '28px',
-      fontFamily: 'Arial Black',
-      color: '#1a1a2e',
+      fontSize: '14px',
+      fontFamily: FONT,
+      color: '#' + PX.TEXT_DARK.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
 
     this.actionBtn.on('pointerdown', () => this.handleAction());
-    this.actionBtn.on('pointerover', () => this.actionBtn.setScale(1.05));
-    this.actionBtn.on('pointerout', () => this.actionBtn.setScale(1));
+    this.actionBtn.on('pointerover', () => this.actionBtn.setFillStyle(PX.HIGHLIGHT));
+    this.actionBtn.on('pointerout', () => {
+      this.actionBtn.setFillStyle(this.isReady ? PX.ERROR : btnColor);
+    });
   }
 
   createTeacherControls() {
-    const { width, height } = this.scale;
+    const { width } = this.scale;
 
-    // 老师大屏入口
-    this.add.text(width - 20, 20, '老师模式', {
-      fontSize: '14px',
-      color: '#ffdd44',
+    // 老师模式标签
+    this.add.text(width - 20, 20, 'TEACHER', {
+      fontSize: '8px',
+      fontFamily: FONT,
+      color: '#' + PX.HIGHLIGHT.toString(16).padStart(6, '0'),
     }).setOrigin(1, 0);
 
-    // 设置按钮（词库、时长等）
-    const settingsBtn = this.add.rectangle(80, 40, 100, 40, 0x3a3a5e)
-      .setInteractive()
-      .on('pointerdown', () => this.showSettings());
+    // 设置按钮
+    const settingsBtn = this.add.rectangle(70, 36, 90, 36, PX.SECONDARY)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.showSettings())
+      .on('pointerover', function () { this.setFillStyle(PX.HIGHLIGHT); })
+      .on('pointerout', function () { this.setFillStyle(PX.SECONDARY); });
 
-    this.add.text(80, 40, '设置', {
-      fontSize: '16px',
-      color: '#ffffff',
+    const btnBorder = this.add.graphics();
+    drawPixelBorder(btnBorder, 70 - 47, 36 - 20, 94, 40, PX.BG_LIGHT, 1);
+
+    this.add.text(70, 36, 'SETUP', {
+      fontSize: '8px',
+      fontFamily: FONT,
+      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
   }
 
@@ -181,10 +229,8 @@ export class LobbyScene extends Phaser.Scene {
     this.soundGenerator.play('click');
 
     if (this.isTeacher) {
-      // 老师开始游戏
       window.network.startGame();
     } else {
-      // 学生准备/取消准备
       this.isReady = !this.isReady;
       window.network.setReady(this.isReady);
       this.updateReadyButton();
@@ -192,36 +238,44 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   updateReadyButton() {
-    const btnColor = this.isReady ? 0xff4444 : 0x00d4ff;
-    const btnText = this.isReady ? '取消准备' : '准备';
+    const btnColor = this.isReady ? PX.ERROR : PX.PRIMARY;
+    const btnText = this.isReady ? '取消准备' : '准  备';
+    const { width } = this.scale;
 
     this.actionBtn.setFillStyle(btnColor);
     this.actionBtnText.setText(btnText);
+
+    // 更新边框颜色
+    if (this.actionBtnBorder) {
+      this.actionBtnBorder.clear();
+      const btnW = 240;
+      const btnH = 54;
+      const btnY = this.scale.height * 0.90;
+      const btnX = width / 2 - btnW / 2;
+      const btnCY = btnY - btnH / 2;
+      const borderColor = this.isReady ? 0xb0443a : 0x5a9e38;
+      drawPixelBorder(this.actionBtnBorder, btnX - 3, btnCY - 3, btnW + 6, btnH + 6, borderColor, 2);
+    }
   }
 
   setupNetworkListeners() {
-    // 玩家加入
     window.network.on('player_joined', (data) => {
       this.addPlayer(data);
       this.soundGenerator.play('item_get');
     });
 
-    // 玩家离开
     window.network.on('player_left', (data) => {
       this.removePlayer(data.socketId);
     });
 
-    // 玩家准备状态更新
     window.network.on('player_ready', (data) => {
       this.updatePlayerReady(data.socketId, true);
     });
 
-    // 倒计时开始
     window.network.on('countdown', (data) => {
       this.showCountdown(data.count);
     });
 
-    // 游戏开始
     window.network.on('game_start', () => {
       this.scene.start('GameScene', {
         code: this.roomCode,
@@ -229,7 +283,6 @@ export class LobbyScene extends Phaser.Scene {
       });
     });
 
-    // 初始玩家列表
     window.network.on('player_list', (data) => {
       data.players.forEach((p) => this.addPlayer(p));
     });
@@ -242,8 +295,19 @@ export class LobbyScene extends Phaser.Scene {
     slot.occupied = true;
     slot.socketId = data.socketId;
     slot.nameText.setText(data.name);
-    slot.nameText.setColor('#ffffff');
-    slot.bg.setStrokeStyle(2, PLAYER_COLORS[data.trackNumber - 1].tint);
+    slot.nameText.setColor('#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'));
+
+    // 高亮边框
+    slot.border.clear();
+    const { width } = this.scale;
+    const slotW = 420;
+    const slotX = (width - slotW) / 2;
+    const slotHeight = 52;
+    const startY = this.scale.height * 0.34;
+    const slotGap = 8;
+    const y = startY + (data.trackNumber - 1) * (slotHeight + slotGap);
+    const color = PLAYER_COLORS[data.trackNumber - 1];
+    drawPixelBorder(slot.border, slotX, y, slotW, slotHeight, color.tint, 2);
   }
 
   removePlayer(socketId) {
@@ -253,23 +317,31 @@ export class LobbyScene extends Phaser.Scene {
     slot.occupied = false;
     slot.socketId = null;
     slot.nameText.setText('等待加入...');
-    slot.nameText.setColor('#666666');
+    slot.nameText.setColor('#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'));
     slot.readyText.setText('');
-    slot.bg.setStrokeStyle(2, 0x3a3a5e);
+
+    slot.border.clear();
+    const { width } = this.scale;
+    const slotW = 420;
+    const slotX = (width - slotW) / 2;
+    const slotHeight = 52;
+    const startY = this.scale.height * 0.34;
+    const slotGap = 8;
+    const y = startY + (slot.trackNumber - 1) * (slotHeight + slotGap);
+    drawPixelBorder(slot.border, slotX, y, slotW, slotHeight, PX.BG_LIGHT, 1);
   }
 
   updatePlayerReady(socketId, ready) {
     const slot = this.playerSlots.find((s) => s.socketId === socketId);
     if (!slot) return;
 
-    slot.readyText.setText(ready ? '已准备 ✓' : '');
+    slot.readyText.setText(ready ? 'READY' : '');
     if (ready) {
       this.soundGenerator.play('click');
     }
   }
 
   showCountdown(count) {
-    // 倒计时数字
     const { width, height } = this.scale;
 
     if (this.countdownText) {
@@ -277,19 +349,18 @@ export class LobbyScene extends Phaser.Scene {
     }
 
     this.countdownText = this.add.text(width / 2, height / 2, count.toString(), {
-      fontSize: '200px',
-      fontFamily: 'Arial Black',
-      color: '#ff4444',
-      stroke: '#ffffff',
-      strokeThickness: 8,
+      fontSize: '140px',
+      fontFamily: FONT,
+      color: '#' + PX.HIGHLIGHT.toString(16).padStart(6, '0'),
     }).setOrigin(0.5).setDepth(100);
 
+    // 像素感缩放动画（骤变式，无弹性缓动）
     this.tweens.add({
       targets: this.countdownText,
-      scaleX: [0, 1.2, 1],
-      scaleY: [0, 1.2, 1],
-      duration: 800,
-      ease: 'Back.easeOut',
+      scaleX: { from: 0.3, to: 1 },
+      scaleY: { from: 0.3, to: 1 },
+      duration: 600,
+      ease: 'Linear',
     });
 
     this.soundGenerator.play('countdown');
@@ -297,14 +368,13 @@ export class LobbyScene extends Phaser.Scene {
     if (count === 1) {
       setTimeout(() => {
         this.countdownText.setText('GO!');
-        this.countdownText.setColor('#44dd44');
+        this.countdownText.setColor('#' + PX.PRIMARY.toString(16).padStart(6, '0'));
         this.soundGenerator.play('go');
       }, 1000);
     }
   }
 
   showSettings() {
-    // 简单的设置弹窗
     console.log('Show settings');
   }
 }
