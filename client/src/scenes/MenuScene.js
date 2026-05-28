@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { SoundGenerator } from '../utils/SoundGenerator.js';
-import { EIGHT_BIT, drawPixelBorder, PLAYER_COLORS } from '../utils/ColorConfig.js';
+import { GHIBLI, drawRoundedRect, drawSoftBorder, drawGlassPanel, PLAYER_COLORS } from '../utils/ColorConfig.js';
+import { createFloatingParticles, createSoftButton, slideUpIn, popIn, EASE } from '../utils/AnimationHelper.js';
 
-const PX = EIGHT_BIT;
-const FONT = 'Press Start 2P';
-const FONT_CN = 'Arial Black';
+const C = GHIBLI;
+const FONT = 'Nunito';
+const FONT_CN = 'ZCOOL KuaiLe';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -37,47 +38,47 @@ export class MenuScene extends Phaser.Scene {
   createBackground() {
     const { width, height } = this.scale;
 
-    // 纯色暖棕背景
-    this.add.rectangle(width / 2, height / 2, width, height, PX.BG_DARK);
+    // 天空渐变色条
+    const skyColors = [C.ACCENT, 0xb8e0e0, 0xcdd8c8, 0xdde8d0, C.BG_CREAM];
+    const bandH = Math.ceil(height / skyColors.length);
+    skyColors.forEach((color, i) => {
+      this.add.rectangle(width / 2, i * bandH + bandH / 2, width, bandH + 1, color, 0.55);
+    });
 
-    // 像素网格装饰（8-bit 经典风格）
-    const gridGfx = this.add.graphics();
-    gridGfx.lineStyle(1, PX.BG_MID, 0.3);
-    for (let x = 0; x < width; x += 40) {
-      gridGfx.lineBetween(x, 0, x, height);
-    }
-    for (let y = 0; y < height; y += 40) {
-      gridGfx.lineBetween(0, y, width, y);
-    }
+    // 底部草地
+    const grassGfx = this.add.graphics();
+    grassGfx.fillStyle(C.GRASS, 0.2);
+    grassGfx.fillRoundedRect(-10, height - 50, width + 20, 100, 25);
+
+    // 飘浮花瓣
+    createFloatingParticles(this, width, height, {
+      count: 8, type: 'petal', depth: 0,
+    });
   }
 
   createLogo() {
     const { width } = this.scale;
 
     if (this.textures.exists('menu-logo')) {
-      const logo = this.add.image(width / 2, 110, 'menu-logo');
-      logo.setScale(0.7);
-
-      // 纯 alpha 入场（无缩放）
-      this.tweens.add({
-        targets: logo,
-        alpha: { from: 0, to: 1 },
-        duration: 600,
-        ease: 'Linear',
-      });
+      const logo = this.add.image(width / 2, 100, 'menu-logo');
+      logo.setScale(0.65).setDepth(2);
+      popIn(this, logo, 600);
     } else {
-      // Fallback: 像素文字 Logo
-      this.add.text(width / 2, 80, '英 语 跑 酷', {
-        fontSize: '36px',
+      // Fallback: 治愈风文字 Logo
+      const title = this.add.text(width / 2, 90, '英语跑酷', {
+        fontSize: '42px',
         fontFamily: FONT_CN,
-        color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
-      }).setOrigin(0.5);
+        color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
+      }).setOrigin(0.5).setDepth(2);
 
-      this.add.text(width / 2, 130, 'ENGLISH  PARKOUR', {
-        fontSize: '10px',
+      this.add.text(width / 2, 135, 'ENGLISH PARKOUR', {
+        fontSize: '14px',
         fontFamily: FONT,
-        color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-      }).setOrigin(0.5);
+        fontStyle: '600',
+        color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+      }).setOrigin(0.5).setDepth(2);
+
+      popIn(this, title, 600);
     }
   }
 
@@ -85,214 +86,193 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     if (this.textures.exists('menu-character')) {
-      const leftChar = this.add.image(100, height - 160, 'menu-character');
-      leftChar.setScale(0.5);
-      leftChar.setFlipX(true);
-      leftChar.setTint(PX.SECONDARY);
+      const leftChar = this.add.image(110, height * 0.52, 'menu-character');
+      leftChar.setScale(0.4).setDepth(1).setAlpha(0.75);
 
-      const rightChar = this.add.image(width - 100, height - 160, 'menu-character');
-      rightChar.setScale(0.5);
-      rightChar.setTint(PX.BG_LIGHT);
+      const rightChar = this.add.image(width - 110, height * 0.52, 'menu-character');
+      rightChar.setScale(0.4).setFlipX(true).setDepth(1).setAlpha(0.75);
+
+      // 呼吸动画
+      [leftChar, rightChar].forEach((char) => {
+        this.tweens.add({
+          targets: char,
+          scaleX: 0.42,
+          scaleY: 0.42,
+          duration: 3000,
+          yoyo: true,
+          repeat: -1,
+          ease: EASE.SMOOTH,
+        });
+      });
     }
   }
 
   createPanel() {
     const { width, height } = this.scale;
-    const panelW = 420;
-    const panelH = 200;
+    const panelW = 400;
+    const panelH = 130;
     const px = (width - panelW) / 2;
-    const py = height * 0.42;
+    const py = height * 0.30;
 
-    // 面板背景（纯色 + 像素边框）
-    const panelBg = this.add.rectangle(width / 2, py + panelH / 2, panelW, panelH, PX.BG_MID, 0.95);
-    const panelBorder = this.add.graphics();
-    drawPixelBorder(panelBorder, px, py, panelW, panelH, PX.BG_LIGHT, 3);
+    // 毛玻璃面板
+    this.panelGfx = this.add.graphics().setDepth(2);
+    drawGlassPanel(this.panelGfx, px, py, panelW, panelH, 12, C.BG_CREAM, 0.88, C.ACCENT, 2);
 
-    // 内装饰线
-    const innerGfx = this.add.graphics();
-    drawPixelBorder(innerGfx, px + 10, py + 10, panelW - 20, panelH - 20, PX.BG_LIGHT, 1);
-
-    this.panelBg = panelBg;
-    this.panelBorder = panelBorder;
-
-    // 名字显示区域（点击弹出输入框）
-    this.createNameDisplay(width / 2, py + 50, panelW - 60);
-  }
-
-  createNameDisplay(x, y, width) {
-    const height = 48;
-    const displayBg = this.add.rectangle(x, y, width, height, PX.BG_DARK, 0.8)
-      .setInteractive({ useHandCursor: true });
-
-    const displayBorder = this.add.graphics();
-    drawPixelBorder(displayBorder, x - width / 2, y - height / 2, width, height, PX.PRIMARY, 2);
-
-    this.nameLabel = this.add.text(x, y - 25, 'YOUR NAME (点击输入)', {
-      fontSize: '8px',
-      fontFamily: FONT,
-      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
-
-    this.nameDisplayText = this.add.text(x, y, '玩家', {
-      fontSize: '16px',
+    // 标签
+    this.nameLabel = this.add.text(width / 2, py + 22, '你的名字', {
+      fontSize: '12px',
       fontFamily: FONT_CN,
-      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
+      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(3);
 
-    // 光标闪烁效果
-    this.cursorText = this.add.text(x + 60, y, '_', {
-      fontSize: '16px',
-      fontFamily: FONT,
-      color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setVisible(false);
+    // 名字显示区域
+    const nameW = panelW - 60;
+    const nameH = 44;
+    const nameX = (width - nameW) / 2;
+    const nameY = py + 55;
 
-    this.tweens.add({
-      targets: this.cursorText,
-      alpha: 0,
-      duration: 400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Linear',
-    });
+    const nameBg = this.add.graphics().setDepth(3);
+    nameBg.fillStyle(C.BG_SAND, 0.9);
+    nameBg.fillRoundedRect(nameX, nameY - nameH / 2, nameW, nameH, 8);
+    nameBg.lineStyle(1, C.ACCENT, 0.5);
+    nameBg.strokeRoundedRect(nameX, nameY - nameH / 2, nameW, nameH, 8);
 
-    displayBg.on('pointerdown', () => {
+    this.nameDisplayText = this.add.text(width / 2, nameY, '玩家', {
+      fontSize: '18px',
+      fontFamily: FONT_CN,
+      color: '#' + C.TEXT_WARM.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(4);
+
+    // 编辑图标
+    const editIcon = this.add.text(width / 2 + nameW / 2 - 18, nameY, '✏️', {
+      fontSize: '14px',
+    }).setOrigin(0.5).setDepth(4);
+
+    // 点击热区
+    const hitArea = this.add.rectangle(width / 2, nameY, nameW, nameH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true }).setDepth(5);
+
+    hitArea.on('pointerdown', () => {
       this.soundGenerator.play('click');
       this.openNameInput();
     });
 
-    displayBg.on('pointerover', () => displayBorder.clear() && drawPixelBorder(displayBorder, x - width / 2, y - height / 2, width, height, PX.HIGHLIGHT, 2));
-    displayBg.on('pointerout', () => displayBorder.clear() && drawPixelBorder(displayBorder, x - width / 2, y - height / 2, width, height, PX.PRIMARY, 2));
+    hitArea.on('pointerover', () => {
+      nameBg.clear();
+      nameBg.fillStyle(C.BG_WARM, 0.9);
+      nameBg.fillRoundedRect(nameX - 1, nameY - nameH / 2 - 1, nameW + 2, nameH + 2, 9);
+      nameBg.lineStyle(2, C.ACCENT, 0.7);
+      nameBg.strokeRoundedRect(nameX - 1, nameY - nameH / 2 - 1, nameW + 2, nameH + 2, 9);
+    });
 
-    this.nameDisplayBg = displayBg;
-    this.nameDisplayBorder = displayBorder;
+    hitArea.on('pointerout', () => {
+      nameBg.clear();
+      nameBg.fillStyle(C.BG_SAND, 0.9);
+      nameBg.fillRoundedRect(nameX, nameY - nameH / 2, nameW, nameH, 8);
+      nameBg.lineStyle(1, C.ACCENT, 0.5);
+      nameBg.strokeRoundedRect(nameX, nameY - nameH / 2, nameW, nameH, 8);
+    });
+
+    this.nameDisplayBg = nameBg;
+
+    // 入场动画
+    slideUpIn(this, [this.nameLabel, this.nameDisplayText, editIcon], 200);
   }
 
   createButtons() {
     const { width, height } = this.scale;
     const cx = width / 2;
-    const startY = height * 0.68;
+    const startY = height * 0.52;
 
-    // 快速开始
-    this.quickStartBtn = this._makeButton(cx, startY, 280, 54,
-      'QUICK  START', PX.PRIMARY, PX.TEXT_DARK,
-      () => this.handleQuickStart());
+    // 快速开始 — 主按钮
+    createSoftButton(this, cx, startY, 280, 50, '快 速 开 始', C.PRIMARY,
+      () => this.handleQuickStart(),
+      { fontSize: '18px', radius: 14 });
 
     // 加入房间
-    this._makeButton(cx, startY + 70, 240, 44,
-      'JOIN  ROOM', PX.BG_LIGHT, PX.TEXT_LIGHT,
-      () => this.openRoomInput());
+    createSoftButton(this, cx, startY + 65, 240, 44, '加 入 房 间', C.SECONDARY,
+      () => this.openRoomInput(),
+      { fontSize: '16px', radius: 12 });
 
     // 老师模式
-    this._makeButton(cx, startY + 125, 200, 38,
-      'TEACHER', PX.BG_MID, PX.TEXT_MUTED,
-      () => this.openRoomInput(true));
-  }
+    createSoftButton(this, cx, startY + 118, 200, 38, '老 师 模 式', C.BG_SAND,
+      () => this.openRoomInput(true),
+      { fontSize: '14px', radius: 10, textColor: C.TEXT_DARK });
 
-  _makeButton(x, y, w, h, text, fillColor, textColor, onClick) {
-    const bx = x - w / 2;
-    const by = y - h / 2;
-
-    const bg = this.add.rectangle(x, y, w, h, fillColor)
-      .setInteractive({ useHandCursor: true });
-
-    const border = this.add.graphics();
-    drawPixelBorder(border, bx - 2, by - 2, w + 4, h + 4,
-      fillColor === PX.PRIMARY ? 0x5a9e38 : PX.BG_LIGHT, 2);
-
-    const label = this.add.text(x, y, text, {
-      fontSize: '11px',
-      fontFamily: FONT,
-      color: '#' + textColor.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
-
-    bg.on('pointerover', () => bg.setFillStyle(PX.HIGHLIGHT));
-    bg.on('pointerout', () => bg.setFillStyle(fillColor));
-    bg.on('pointerdown', () => {
-      this.soundGenerator.play('click');
-      onClick();
-    });
-
-    bg.setAlpha(0); label.setAlpha(0); border.setAlpha(0);
+    // 按钮入场
     this.tweens.add({
-      targets: [bg, label, border],
-      alpha: 1,
-      duration: 400,
-      ease: 'Linear',
+      targets: this.children.list.filter(c => c.type === 'Graphics'),
+      alpha: { from: 0, to: 1 },
+      duration: 500,
+      ease: EASE.SMOOTH,
+      delay: 400,
     });
-
-    return bg;
   }
 
   createInputModal() {
     const { width, height } = this.scale;
 
-    // 输入遮罩（全屏，点击关闭）
-    this.inputOverlay = this.add.rectangle(width / 2, height / 2, width, height, PX.BG_DARK, 0.85)
+    // 浅色遮罩（不再用深棕）
+    this.inputOverlay = this.add.rectangle(width / 2, height / 2, width, height, C.BG_CREAM, 0.75)
       .setVisible(false)
       .setInteractive()
       .setDepth(100);
 
-    // 输入面板
-    const panelW = 400;
-    const panelH = 180;
+    // 圆角面板
+    const panelW = 380;
+    const panelH = 160;
     const px = (width - panelW) / 2;
-    const py = height * 0.35;
+    const py = height * 0.33;
 
-    this.inputPanel = this.add.rectangle(width / 2, py + panelH / 2, panelW, panelH, PX.BG_MID, 0.98)
-      .setVisible(false)
-      .setDepth(100);
+    this.inputPanelGfx = this.add.graphics()
+      .setVisible(false).setDepth(100);
 
-    this.inputPanelBorder = this.add.graphics()
-      .setVisible(false)
-      .setDepth(100);
-    drawPixelBorder(this.inputPanelBorder, px, py, panelW, panelH, PX.PRIMARY, 3);
+    const showPanel = () => {
+      this.inputPanelGfx.clear();
+      drawGlassPanel(this.inputPanelGfx, px, py, panelW, panelH, 14, C.BG_CREAM, 0.95, C.PRIMARY, 2);
+    };
 
-    // 输入标题
-    this.inputTitle = this.add.text(width / 2, py + 30, '', {
-      fontSize: '12px',
+    // 标题
+    this.inputTitle = this.add.text(width / 2, py + 28, '', {
+      fontSize: '14px',
+      fontFamily: FONT_CN,
+      color: '#' + C.TEXT_WARM.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setVisible(false).setDepth(101);
+
+    // 输入值
+    this.inputValue = this.add.text(width / 2, py + 70, '', {
+      fontSize: '30px',
       fontFamily: FONT,
-      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5)
-      .setVisible(false)
-      .setDepth(100);
-
-    // 输入值显示
-    this.inputValue = this.add.text(width / 2, py + 80, '', {
-      fontSize: '28px',
-      fontFamily: FONT,
-      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5)
-      .setVisible(false)
-      .setDepth(100);
+      fontStyle: '700',
+      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setVisible(false).setDepth(101);
 
     // 光标
-    this.inputCursor = this.add.text(width / 2 + 80, py + 80, '_', {
-      fontSize: '28px',
+    this.inputCursor = this.add.text(width / 2 + 80, py + 70, '|', {
+      fontSize: '26px',
       fontFamily: FONT,
-      color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5)
-      .setVisible(false)
-      .setDepth(100);
+      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setVisible(false).setDepth(101);
 
     this.tweens.add({
       targets: this.inputCursor,
       alpha: 0,
-      duration: 400,
+      duration: 500,
       yoyo: true,
       repeat: -1,
-      ease: 'Linear',
+      ease: EASE.SMOOTH,
     });
 
-    // 提示文字
-    this.inputHint = this.add.text(width / 2, py + 140, '[ENTER] 确认  [ESC] 取消', {
-      fontSize: '8px',
+    // 提示
+    this.inputHint = this.add.text(width / 2, py + 125, 'Enter 确认  ·  Esc 取消', {
+      fontSize: '11px',
       fontFamily: FONT,
-      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5)
-      .setVisible(false)
-      .setDepth(100);
+      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setVisible(false).setDepth(101);
 
-    // 点击遮罩关闭
+    // 保存 showPanel 回调
+    this._showModalPanel = showPanel;
+
     this.inputOverlay.on('pointerdown', () => this.closeInput());
   }
 
@@ -300,16 +280,8 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard.on('keydown', (event) => {
       if (!this.inputMode) return;
 
-      if (event.key === 'Enter') {
-        this.confirmInput();
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        this.closeInput();
-        return;
-      }
-
+      if (event.key === 'Enter') { this.confirmInput(); return; }
+      if (event.key === 'Escape') { this.closeInput(); return; }
       if (event.key === 'Backspace') {
         if (this.inputMode === 'name') {
           this.playerName = this.playerName.slice(0, -1);
@@ -320,20 +292,16 @@ export class MenuScene extends Phaser.Scene {
         return;
       }
 
-      // 输入限制
       const char = event.key;
       if (this.inputMode === 'name') {
-        // 名字：字母数字中文，最多8个字符
         if (/^[a-zA-Z0-9\u4e00-\u9fa5]$/.test(char) && this.playerName.length < 8) {
           this.playerName += char;
         }
       } else if (this.inputMode === 'room') {
-        // 房间码：仅数字，最多6位
         if (/^[0-9]$/.test(char) && this.roomCode.length < 6) {
           this.roomCode += char;
         }
       }
-
       this.updateInputDisplay();
     });
   }
@@ -354,11 +322,11 @@ export class MenuScene extends Phaser.Scene {
   showInputModal(title, value) {
     this.inputTitle.setText(title);
     this.inputValue.setText(value);
-    this.inputCursor.x = this.inputValue.x + this.inputValue.width / 2 + 10;
+    this.inputCursor.x = this.inputValue.x + this.inputValue.width / 2 + 12;
 
+    this._showModalPanel();
     this.inputOverlay.setVisible(true);
-    this.inputPanel.setVisible(true);
-    this.inputPanelBorder.setVisible(true);
+    this.inputPanelGfx.setVisible(true);
     this.inputTitle.setVisible(true);
     this.inputValue.setVisible(true);
     this.inputCursor.setVisible(true);
@@ -368,14 +336,13 @@ export class MenuScene extends Phaser.Scene {
   updateInputDisplay() {
     const value = this.inputMode === 'name' ? this.playerName : this.roomCode;
     this.inputValue.setText(value);
-    this.inputCursor.x = this.inputValue.x + this.inputValue.width / 2 + 10;
+    this.inputCursor.x = this.inputValue.x + this.inputValue.width / 2 + 12;
   }
 
   confirmInput() {
     if (this.inputMode === 'name') {
       this.playerName = this.playerName.trim() || '玩家';
       this.nameDisplayText.setText(this.playerName);
-      this.nameLabel.setText('YOUR NAME');
     }
     this.closeInput();
   }
@@ -383,8 +350,7 @@ export class MenuScene extends Phaser.Scene {
   closeInput() {
     this.inputMode = null;
     this.inputOverlay.setVisible(false);
-    this.inputPanel.setVisible(false);
-    this.inputPanelBorder.setVisible(false);
+    this.inputPanelGfx.setVisible(false);
     this.inputTitle.setVisible(false);
     this.inputValue.setVisible(false);
     this.inputCursor.setVisible(false);
@@ -400,12 +366,10 @@ export class MenuScene extends Phaser.Scene {
   handleJoinRoom() {
     const name = this.playerName.trim() || '玩家';
     const code = this.roomCode.trim();
-
     if (!code || code.length !== 6) {
       this.showError('请输入6位房间号');
       return;
     }
-
     this.scene.start('LobbyScene', { code, name, isTeacher: false });
     window.network.joinRoom(code, name, false);
   }
@@ -413,12 +377,10 @@ export class MenuScene extends Phaser.Scene {
   handleTeacherMode() {
     const name = this.playerName.trim() || '老师';
     const code = this.roomCode.trim();
-
     if (!code || code.length !== 6) {
       this.showError('请输入房间号');
       return;
     }
-
     this.scene.start('TeacherScene', { code, name });
     window.network.joinRoom(code, name, true);
   }
@@ -432,31 +394,47 @@ export class MenuScene extends Phaser.Scene {
 
   showError(msg) {
     this.soundGenerator.play('wrong');
-    const { width, height } = this.scale;
+    const { width } = this.scale;
 
-    const errBg = this.add.rectangle(width / 2, height - 50, 500, 36, PX.ERROR, 0.9);
-    const errBorder = this.add.graphics();
-    drawPixelBorder(errBorder, width / 2 - 252, height - 68, 504, 40, 0xb0443a, 2);
+    // Toast 风格错误提示（圆角，顶部滑入）
+    const toastW = 400;
+    const toastH = 40;
+    const toastX = (width - toastW) / 2;
+    const toastY = 60;
 
-    const errText = this.add.text(width / 2, height - 50, msg, {
-      fontSize: '10px',
+    const toastGfx = this.add.graphics().setDepth(200);
+    toastGfx.fillStyle(C.ERROR, 0.92);
+    toastGfx.fillRoundedRect(toastX, toastY, toastW, toastH, 10);
+
+    const toastText = this.add.text(width / 2, toastY + toastH / 2, msg, {
+      fontSize: '14px',
       fontFamily: FONT_CN,
-      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
+      color: '#ffffff',
+    }).setOrigin(0.5).setDepth(201);
 
+    // 从顶部滑入
+    toastGfx.y = -60;
+    toastText.y = -60;
     this.tweens.add({
-      targets: [errBg, errBorder, errText],
+      targets: [toastGfx, toastText],
+      y: '+=60',
+      duration: 300,
+      ease: EASE.BOUNCE,
+    });
+
+    // 自动滑出消失
+    this.tweens.add({
+      targets: [toastGfx, toastText],
       alpha: 0,
-      duration: 2500,
-      delay: 1000,
-      onComplete: () => { errBg.destroy(); errBorder.destroy(); errText.destroy(); },
+      y: '-=20',
+      duration: 400,
+      delay: 2000,
+      ease: EASE.SMOOTH,
+      onComplete: () => { toastGfx.destroy(); toastText.destroy(); },
     });
   }
 
   shutdown() {
-    this.panelBg?.destroy();
-    this.panelBorder?.destroy();
     this.inputOverlay?.destroy();
-    this.inputPanel?.destroy();
   }
 }

@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { SoundGenerator } from '../utils/SoundGenerator.js';
-import { EIGHT_BIT, drawPixelBorder } from '../utils/ColorConfig.js';
+import { GHIBLI, drawRoundedRect, drawSoftBorder, drawGlassPanel } from '../utils/ColorConfig.js';
+import { createFloatingParticles } from '../utils/AnimationHelper.js';
 
-const PX = EIGHT_BIT;
-const FONT = 'Press Start 2P';
-const FONT_CN = 'Arial Black';
+const C = GHIBLI;
+const FONT = 'Nunito';
+const FONT_CN = 'ZCOOL KuaiLe';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -15,48 +16,79 @@ export class BootScene extends Phaser.Scene {
   // === 阶段 1：快速加载菜单素材（目标 2-3s 出菜单）===
   preload() {
     const { width, height } = this.scale;
-
-    // 加载进度 UI（8-bit 风格）
     this._createLoadingUI(width, height);
 
     // 仅加载菜单必需的素材
     this.load.image('menu-logo', 'assets/ui/menu-logo.jpg');
     this.load.image('menu-character', 'assets/ui/menu-character.png');
-
-    // 注意：游戏素材（精灵图、背景）在菜单/大厅闲置期间后台加载
   }
 
   _createLoadingUI(width, height) {
-    const barW = 320;
-    const barH = 16;
+    // 奶油白全屏背景
+    this.add.rectangle(width / 2, height / 2, width, height, C.BG_CREAM).setDepth(1000);
+
+    // 飘浮粒子
+    createFloatingParticles(this, width, height, {
+      count: 6, type: 'petal', depth: 1001,
+    });
+
+    // 标题
+    this.add.text(width / 2, height * 0.32, '英语跑酷', {
+      fontSize: '48px',
+      fontFamily: FONT_CN,
+      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(1002);
+
+    this.add.text(width / 2, height * 0.40, 'English Parkour', {
+      fontSize: '16px',
+      fontFamily: FONT,
+      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(1002);
+
+    // 圆角进度条
+    const barW = 300;
+    const barH = 10;
     const barX = (width - barW) / 2;
     const barY = height * 0.50;
 
-    this.add.rectangle(width / 2, height / 2, width, height, PX.BG_DARK).setDepth(1000);
+    // 进度条背景（圆角）
+    const barBgGfx = this.add.graphics().setDepth(1002);
+    barBgGfx.fillStyle(C.BG_SAND, 1);
+    barBgGfx.fillRoundedRect(barX, barY, barW, barH, 5);
 
-    this.add.text(width / 2, height * 0.35, '英 语 跑 酷', {
-      fontSize: '36px',
-      fontFamily: FONT_CN,
-      color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setDepth(1000);
+    // 进度条边框
+    const barBorderGfx = this.add.graphics().setDepth(1002);
+    barBorderGfx.lineStyle(2, C.ACCENT, 0.6);
+    barBorderGfx.strokeRoundedRect(barX, barY, barW, barH, 5);
 
-    this.add.text(width / 2, height * 0.43, 'LOADING...', {
-      fontSize: '12px',
-      fontFamily: FONT,
-      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setDepth(1000);
+    // 进度条填充
+    this._progressBar = this.add.rectangle(barX, barY, 0, barH, C.PRIMARY)
+      .setOrigin(0, 0).setDepth(1003);
+    // 用 mask 实现圆角填充效果
+    const maskGfx = this.add.graphics().setDepth(1004);
+    maskGfx.fillStyle(0xffffff);
+    maskGfx.fillRoundedRect(barX, barY, barW, barH, 5);
+    this._progressBar.setMask(maskGfx.createGeometryMask());
 
-    const borderGfx = this.add.graphics().setDepth(1000);
-    drawPixelBorder(borderGfx, barX - 4, barY - 4, barW + 8, barH + 8, PX.BG_LIGHT, 3);
-
-    this._progressBar = this.add.rectangle(barX, barY, 0, barH, PX.PRIMARY)
-      .setOrigin(0, 0).setDepth(1000);
-
+    // 百分比文字
     this._percentText = this.add.text(width / 2, height * 0.56, '0%', {
+      fontSize: '14px',
+      fontFamily: FONT,
+      fontStyle: '600',
+      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(1002);
+
+    // 加载提示
+    this.add.text(width / 2, height * 0.62, '正在准备...', {
       fontSize: '12px',
       fontFamily: FONT,
-      color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setDepth(1000);
+      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(1002);
+
+    // 底部装饰草地
+    const grassGfx = this.add.graphics().setDepth(1001);
+    grassGfx.fillStyle(C.GRASS, 0.3);
+    grassGfx.fillRoundedRect(0, height - 40, width, 80, 20);
 
     this.load.on('progress', (value) => {
       this._progressBar.width = barW * value;
@@ -68,25 +100,21 @@ export class BootScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.children.removeAll(true);
 
-    // 深色背景
-    this.add.rectangle(width / 2, height / 2, width, height, PX.BG_DARK);
+    // 奶油白背景
+    this.add.rectangle(width / 2, height / 2, width, height, C.BG_CREAM);
 
     // 纹理预处理（仅处理已加载的菜单素材）
     this._processTextures();
 
-    // 注意：不在此处调用 _createAnimations()，游戏素材尚未加载
-    // 动画会在 _loadGameAssets() 完成后创建
-
     // 启动点击开始画面
     this.showStartScreen();
 
-    // 阶段 2：后台加载游戏素材（跑酷精灵图 + 背景 + BGM）
+    // 阶段 2：后台加载游戏素材
     this._loadGameAssets();
   }
 
   // === 阶段 2：后台加载游戏素材 ===
   _loadGameAssets() {
-    // 使用 Phaser Loader 的独立加载（不影响当前场景）
     this.load.image('run-sheet', 'assets/characters/run-sheet.png');
     this.load.image('pose-sheet', 'assets/characters/pose-sheet.png');
     this.load.image('items-strip', 'assets/items/items-strip.png');
@@ -95,10 +123,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('bg-city-mid', 'assets/backgrounds/city-mid.jpg');
     this.load.image('bg-city-near', 'assets/backgrounds/city-near.jpg');
 
-    // 加载完成回调
     this.load.once('complete', () => {
       this.gameAssetsLoaded = true;
-      // 纹理预处理 + 动画创建
       this._processTextures();
       this._createAnimations();
       console.log('[BootScene] 游戏素材后台加载完成');
@@ -109,7 +135,6 @@ export class BootScene extends Phaser.Scene {
 
   // === 纹理帧切片（兼容旧/新尺寸） ===
   _processTextures() {
-    // run-sheet：4×2 网格，每帧 128×128 → 512×256（PNG）或动态计算（旧 JPG）
     const runSheet = this.textures.get('run-sheet');
     if (runSheet && !runSheet.has('run_1')) {
       const rw = runSheet.source[0]?.width || 512;
@@ -123,7 +148,6 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // pose-sheet：5×1 横条，每帧 128×128 → 640×128（PNG）或动态计算
     const poseSheet = this.textures.get('pose-sheet');
     const poseNames = ['idle', 'slide', 'stun', 'victory', 'shield'];
     if (poseSheet && !poseSheet.has('pose_idle')) {
@@ -135,7 +159,6 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    // items-strip：5×1 横条，每帧 64×64 → 320×64（PNG）或动态计算
     const itemsStrip = this.textures.get('items-strip');
     const itemNames = ['rocket', 'electric', 'banana', 'shield', 'magnet'];
     if (itemsStrip && !itemsStrip.has('item-rocket')) {
@@ -150,8 +173,6 @@ export class BootScene extends Phaser.Scene {
 
   // === 动画创建 ===
   _createAnimations() {
-    // 跑步动画（8 帧，12fps）
-    // 仅在 run-sheet 纹理已加载时才创建
     const runSheet = this.textures.get('run-sheet');
     if (!this.anims.exists('run') && runSheet && runSheet.has('run_1')) {
       this.anims.create({
@@ -162,13 +183,12 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    // VFX 动画（动态计算帧切片以兼容不同尺寸）
     const vfxStrip = this.textures.get('vfx-strip');
     if (vfxStrip && !vfxStrip.has('electric_0')) {
       const source = vfxStrip.source[0];
       const imgW = source.width;
       const imgH = source.height;
-      const frameCount = 10;   // 5 electric + 5 shield
+      const frameCount = 10;
       const frameH = Math.floor(imgH / frameCount);
 
       for (let i = 0; i < 5; i++) {
@@ -198,84 +218,163 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
-  // === 点击开始画面 ===
+  // === 点击开始画面（吉卜力治愈风格） ===
   showStartScreen() {
     const { width, height } = this.scale;
 
-    // 装饰像素边框
-    const outerGfx = this.add.graphics();
-    drawPixelBorder(outerGfx, 20, 20, width - 40, height - 40, PX.BG_LIGHT, 3);
+    // 飘浮花瓣背景
+    createFloatingParticles(this, width, height, {
+      count: 10, type: 'petal', depth: 1,
+    });
 
-    // 标题
-    const title = this.add.text(width / 2, height * 0.28, '英 语 跑 酷', {
+    // 天空渐变（多个色条模拟）
+    const skyColors = [C.ACCENT, 0xb8e0e0, 0xccd5c8, 0xdde8d0, C.BG_CREAM];
+    const bandH = Math.ceil(height / skyColors.length);
+    skyColors.forEach((color, i) => {
+      this.add.rectangle(width / 2, i * bandH + bandH / 2, width, bandH + 1, color, 0.5)
+        .setDepth(0);
+    });
+
+    // 底部草地装饰
+    const grassGfx = this.add.graphics().setDepth(1);
+    grassGfx.fillStyle(C.GRASS, 0.25);
+    grassGfx.fillRoundedRect(-20, height - 60, width + 40, 120, 30);
+
+    // --- Logo 卡片 ---
+    const logoW = 360;
+    const logoH = 90;
+    const logoX = (width - logoW) / 2;
+    const logoY = height * 0.10;
+
+    const logoGfx = this.add.graphics().setDepth(2);
+    drawGlassPanel(logoGfx, logoX, logoY, logoW, logoH, 14, C.BG_CREAM, 0.92, C.ACCENT, 2);
+
+    const title = this.add.text(width / 2, logoY + 30, '英语跑酷', {
       fontSize: '42px',
       fontFamily: FONT_CN,
-      color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
+      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(3);
 
-    this.add.text(width / 2, height * 0.38, 'ENGLISH PARKOUR', {
-      fontSize: '11px',
+    this.add.text(width / 2, logoY + 68, 'ENGLISH PARKOUR', {
+      fontSize: '12px',
       fontFamily: FONT,
-      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
+      fontStyle: '600',
+      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(3);
 
-    // "PRESS START" 按钮
+    // Logo 入场动画
+    title.setAlpha(0);
+    title.y += 20;
+    this.tweens.add({
+      targets: title,
+      alpha: 1,
+      y: logoY + 30,
+      duration: 600,
+      ease: 'Back.easeOut',
+    });
+
+    // --- 角色立绘 ---
+    if (this.textures.exists('menu-character')) {
+      const leftChar = this.add.image(110, height * 0.55, 'menu-character')
+        .setScale(0.42).setDepth(1).setAlpha(0.8);
+      const rightChar = this.add.image(width - 110, height * 0.55, 'menu-character')
+        .setScale(0.42).setFlipX(true).setDepth(1).setAlpha(0.8);
+
+      // 呼吸动画
+      [leftChar, rightChar].forEach((char) => {
+        this.tweens.add({
+          targets: char,
+          scaleX: 0.44,
+          scaleY: 0.44,
+          duration: 3000,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      });
+    }
+
+    // --- 开始按钮 ---
     const btnW = 260;
     const btnH = 56;
     const btnX = width / 2 - btnW / 2;
-    const btnY = height * 0.55 - btnH / 2;
+    const btnY = height * 0.72 - btnH / 2;
 
-    const btnBg = this.add.rectangle(width / 2, height * 0.55, btnW, btnH, PX.PRIMARY)
-      .setInteractive({ useHandCursor: true });
+    const btnBg = this.add.graphics().setDepth(3);
+    btnBg.fillStyle(C.PRIMARY, 1);
+    btnBg.fillRoundedRect(btnX, btnY, btnW, btnH, 14);
+    btnBg.lineStyle(2, 0x5a8a3e, 0.4);
+    btnBg.strokeRoundedRect(btnX, btnY, btnW, btnH, 14);
 
-    const btnBorder = this.add.graphics();
-    drawPixelBorder(btnBorder, btnX - 4, btnY - 4, btnW + 8, btnH + 8, 0x5a9e38, 3);
+    const btnText = this.add.text(width / 2, height * 0.72, '开始游戏', {
+      fontSize: '20px',
+      fontFamily: FONT_CN,
+      color: '#ffffff',
+    }).setOrigin(0.5).setDepth(4);
 
-    const btnText = this.add.text(width / 2, height * 0.55, 'PRESS  START', {
-      fontSize: '14px',
-      fontFamily: FONT,
-      color: '#' + PX.TEXT_DARK.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
+    // 按钮热区
+    const hitArea = this.add.rectangle(width / 2, height * 0.72, btnW, btnH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true }).setDepth(5);
 
-    // 按钮闪烁
+    // 按钮呼吸动画
     this.tweens.add({
-      targets: [btnBg, btnBorder, btnText],
-      alpha: 0.5,
-      duration: 600,
+      targets: [btnBg, btnText],
+      alpha: 0.7,
+      duration: 800,
       yoyo: true,
       repeat: -1,
-      ease: 'Linear',
+      ease: 'Sine.easeInOut',
     });
 
-    // 底部提示
-    this.add.text(width / 2, height * 0.70, 'CLICK / SPACE / ENTER', {
-      fontSize: '9px',
-      fontFamily: FONT,
-      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
+    hitArea.on('pointerover', () => {
+      btnBg.clear();
+      btnBg.fillStyle(0x7fb069, 1);
+      btnBg.fillRoundedRect(btnX - 2, btnY - 2, btnW + 4, btnH + 4, 16);
+      btnBg.lineStyle(2, 0x5a8a3e, 0.5);
+      btnBg.strokeRoundedRect(btnX - 2, btnY - 2, btnW + 4, btnH + 4, 16);
+    });
 
-    this.add.text(width / 2, height * 0.76, '点击屏幕开始游戏', {
-      fontSize: '14px',
+    hitArea.on('pointerout', () => {
+      btnBg.clear();
+      btnBg.fillStyle(C.PRIMARY, 1);
+      btnBg.fillRoundedRect(btnX, btnY, btnW, btnH, 14);
+      btnBg.lineStyle(2, 0x5a8a3e, 0.4);
+      btnBg.strokeRoundedRect(btnX, btnY, btnW, btnH, 14);
+    });
+
+    // 点击开始
+    const startGame = () => {
+      SoundGenerator.unlock();
+      this.scene.start('MenuScene');
+    };
+
+    hitArea.on('pointerdown', startGame);
+    this.input.keyboard.once('keydown-SPACE', startGame);
+    this.input.keyboard.once('keydown-ENTER', startGame);
+
+    // 底部提示
+    this.add.text(width / 2, height * 0.80, '点击屏幕 或 按空格键/回车键 开始', {
+      fontSize: '13px',
       fontFamily: FONT_CN,
-      color: '#' + PX.SECONDARY.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
+      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(3);
 
     // 版本标识
-    this.add.text(width / 2, height - 24, 'v1.2.0  [8-BIT]', {
-      fontSize: '8px',
+    this.add.text(width / 2, height - 22, 'v2.0  Ghibli', {
+      fontSize: '10px',
       fontFamily: FONT,
-      color: '#' + PX.BG_LIGHT.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5);
+      fontStyle: '600',
+      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setDepth(3);
 
-    // 加载提示（如果游戏素材还在后台加载中）
+    // 加载提示
     if (!this.gameAssetsLoaded) {
-      const loadingHint = this.add.text(width / 2, height - 48, '(加载中...)', {
-        fontSize: '8px',
+      const loadingHint = this.add.text(width / 2, height - 42, '正在准备游戏素材...', {
+        fontSize: '11px',
         fontFamily: FONT,
-        color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-      }).setOrigin(0.5);
+        color: '#' + C.ACCENT.toString(16).padStart(6, '0'),
+      }).setOrigin(0.5).setDepth(3);
 
-      // 加载完成后自动隐藏
       const checkLoaded = this.time.addEvent({
         delay: 500,
         callback: () => {
@@ -287,19 +386,5 @@ export class BootScene extends Phaser.Scene {
         loop: true,
       });
     }
-
-    // 点击开始处理
-    const startGame = () => {
-      SoundGenerator.unlock();
-      this.scene.start('MenuScene');
-    };
-
-    btnBg.on('pointerdown', startGame);
-    this.input.keyboard.once('keydown-SPACE', startGame);
-    this.input.keyboard.once('keydown-ENTER', startGame);
-
-    // 标题入场动画
-    title.setAlpha(0);
-    this.tweens.add({ targets: title, alpha: 1, duration: 500, ease: 'Linear' });
   }
 }

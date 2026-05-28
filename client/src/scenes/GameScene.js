@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { SoundGenerator } from '../utils/SoundGenerator.js';
-import { EIGHT_BIT, drawPixelBorder, PLAYER_COLORS } from '../utils/ColorConfig.js';
+import { GHIBLI, PLAYER_COLORS } from '../utils/ColorConfig.js';
+import { burstParticles } from '../utils/AnimationHelper.js';
 import { clamp, lerp } from '../utils/helpers.js';
 
-const PX = EIGHT_BIT;
-const FONT = 'Press Start 2P';
-const FONT_CN = 'Arial Black';
+const C = GHIBLI;
+const FONT = 'Nunito';
+const FONT_CN = 'ZCOOL KuaiLe';
 
 // === LF2 横轴卷轴常量 ===
 const WORLD = Object.freeze({
@@ -20,7 +21,6 @@ const WORLD = Object.freeze({
 const CAMERA = Object.freeze({
   SMOOTH: 0.06,
   DEAD_ZONE: 60,
-  SPRITE_VISIBLE_RANGE: 15,
 });
 
 export class GameScene extends Phaser.Scene {
@@ -31,6 +31,7 @@ export class GameScene extends Phaser.Scene {
     this.mySocketId = null;
     this.items = [];
     this.wordChallenge = null;
+    this._speedLineTimer = 0;
   }
 
   init(data) {
@@ -50,10 +51,10 @@ export class GameScene extends Phaser.Scene {
     this.soundGenerator.stopBGM();
     this.soundGenerator.playBGM('game');
 
-    // === 设置世界边界（Camera 约束） ===
+    // 世界边界
     this.cameras.main.setBounds(0, 0, WORLD.WIDTH, WORLD.HEIGHT);
 
-    // === 1. 三层视差背景（scrollFactor 0.1/0.3/0.6） ===
+    // === 1. 三层视差背景（纯代码绘制，不依赖外部图片）===
     this.createParallaxBackgrounds(width, height);
 
     // === 2. 世界空间跑道 ===
@@ -62,16 +63,16 @@ export class GameScene extends Phaser.Scene {
     // === 3. 起点/终点线 ===
     this.createStartFinishLines();
 
-    // === 4. HUD（scrollFactor 0，最高 depth） ===
+    // === 4. HUD ===
     this.createHUD(width, height);
 
-    // === 5. 虚拟键盘 + 物理键盘 ===
+    // === 5. 虚拟键盘 ===
     this.createVirtualKeyboard(width, height);
     this.setupPhysicalKeyboard();
 
     this.mySocketId = window.network.socket.id;
 
-    // === 6. 玩家加入事件（首次同步） ===
+    // === 6. 玩家加入事件 ===
     this.handleLateJoin();
 
     // === 7. 网络事件 ===
@@ -87,24 +88,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ==============================================================
-  //  视差背景（真 LF2 卷轴）
+  //  视差背景 — 使用真实背景图 + 天空渐变
   // ==============================================================
   createParallaxBackgrounds(viewW, viewH) {
-    // 远山 — 最慢
-    this.bgFar = this.add.tileSprite(viewW / 2, viewH / 2, viewW, viewH, 'bg-city-far')
-      .setScrollFactor(0.1).setDepth(1);
+    // --- 天空渐变 (scrollFactor 0, depth 0) ---
+    const skyColors = [C.ACCENT, 0xb8e0e0, 0xc8ddd0, C.BG_CREAM];
+    const bandH = Math.ceil(viewH / skyColors.length);
+    const skyContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(0);
+    skyColors.forEach((color, i) => {
+      skyContainer.add(this.add.rectangle(viewW / 2, i * bandH + bandH / 2, viewW, bandH + 1, color, 0.6));
+    });
 
-    // 城市中景 — 中速
-    this.bgMid = this.add.tileSprite(viewW / 2, viewH / 2, viewW, viewH, 'bg-city-mid')
-      .setScrollFactor(0.3).setDepth(2);
-
-    // 路面近景 — 最快（底部装饰性路面）
-    this.bgNear = this.add.tileSprite(viewW / 2, viewH * 0.85, viewW, viewH * 0.3, 'bg-city-near')
-      .setScrollFactor(0.6).setDepth(3);
-
-    // 半透明暖色叠加层
-    const overlay = this.add.rectangle(viewW / 2, viewH / 2, viewW, viewH, PX.BG_DARK, 0.12)
-      .setScrollFactor(0).setDepth(4);
+    // --- 三层视差背景（真实图片素材）---
+    // 远山/地平线层 — 慢速滚动
+    if (this.textures.exists('bg-city-far')) {
+      this.add.tileSprite(0, 0, WORLD.WIDTH, viewH, 'bg-city-far')
+        .setOrigin(0).setScrollFactor(0.08).setDepth(1);
+    }
+    // 中景层 — 中速滚动
+    if (this.textures.exists('bg-city-mid')) {
+      this.add.tileSprite(0, 0, WORLD.WIDTH, viewH, 'bg-city-mid')
+        .setOrigin(0).setScrollFactor(0.25).setDepth(2);
+    }
+    // 近景层 — 较快速滚动
+    if (this.textures.exists('bg-city-near')) {
+      this.add.tileSprite(0, 0, WORLD.WIDTH, viewH, 'bg-city-near')
+        .setOrigin(0).setScrollFactor(0.45).setDepth(3);
+    }
   }
 
   // ==============================================================
@@ -117,31 +127,27 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < WORLD.TRACK_COUNT; i++) {
       const y = trackH * i + trackH / 2;
 
-      // 跑道背景（横跨整个世界）
-      const fillColor = i % 2 === 0 ? PX.BG_MID : 0x352518;
+      // 跑道背景（圆角矩形风格）
+      const fillColor = i % 2 === 0 ? C.BG_CREAM : C.BG_SAND;
+      const fillAlpha = i % 2 === 0 ? 0.45 : 0.35;
       const trackBg = this.add.rectangle(
-        WORLD.WIDTH / 2, y, WORLD.WIDTH, trackH - 2,
-        fillColor
+        WORLD.WIDTH / 2, y, WORLD.WIDTH, trackH - 3,
+        fillColor, fillAlpha
       ).setDepth(5);
 
-      // 跑道编号标签（固定在起点附近）
+      // 柔和分隔线（虚线风格：每隔一段画一个点）
+      const dashGfx = this.add.graphics().setDepth(6);
+      dashGfx.lineStyle(1, C.ACCENT, 0.25);
+      dashGfx.lineBetween(0, y - trackH / 2, WORLD.WIDTH, y - trackH / 2);
+      dashGfx.lineBetween(0, y + trackH / 2, WORLD.WIDTH, y + trackH / 2);
+
+      // 跑道编号
       this.add.text(WORLD.START_X - 30, y, `${i + 1}`, {
         fontSize: '11px',
         fontFamily: FONT,
-        color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
+        fontStyle: '700',
+        color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
       }).setOrigin(0.5).setDepth(8);
-
-      // 上边框线（世界宽度）
-      const topBorder = this.add.rectangle(
-        WORLD.WIDTH / 2, y - trackH / 2, WORLD.WIDTH, 2,
-        PX.PRIMARY, 0.35
-      ).setDepth(6);
-
-      // 下边框线
-      const botBorder = this.add.rectangle(
-        WORLD.WIDTH / 2, y + trackH / 2, WORLD.WIDTH, 2,
-        PX.PRIMARY, 0.35
-      ).setDepth(6);
 
       this.tracks.push({ y, height: trackH, bg: trackBg });
     }
@@ -153,113 +159,130 @@ export class GameScene extends Phaser.Scene {
   createStartFinishLines() {
     const { height } = this.scale;
 
-    // 起点线（像素绿虚线）
+    // 起点线（柔和绿虚线）
     const startGfx = this.add.graphics().setDepth(8);
-    for (let y = 0; y < height; y += 12) {
-      startGfx.fillStyle(0x6bb348, 0.8);
-      startGfx.fillRect(WORLD.START_X - 1, y, 3, 8);
+    for (let y = 0; y < height; y += 14) {
+      startGfx.fillStyle(C.PRIMARY, 0.7);
+      startGfx.fillRoundedRect(WORLD.START_X - 1, y, 3, 9, 1);
     }
-    this.add.text(WORLD.START_X + 6, height - 20, 'START', {
-      fontSize: '8px',
+    this.add.text(WORLD.START_X + 8, height - 18, 'START', {
+      fontSize: '10px',
       fontFamily: FONT,
-      color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
+      fontStyle: '600',
+      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
     }).setOrigin(0, 1).setDepth(8);
 
-    // 终点线（棋盘格）
+    // 终点线（暖色棋盘格 → 柔和竖条纹）
     const finishGfx = this.add.graphics().setDepth(8);
-    for (let y = 0; y < height; y += 16) {
-      for (let dx = 0; dx < 12; dx += 6) {
-        const color = ((y / 16) + (dx / 6)) % 2 === 0 ? 0xffffff : 0x3b2818;
-        finishGfx.fillStyle(color, 0.9);
-        finishGfx.fillRect(WORLD.FINISH_X + dx, y, 6, 16);
+    for (let y = 0; y < height; y += 14) {
+      for (let dx = 0; dx < 10; dx += 5) {
+        const stripeColor = ((y / 14) + (dx / 5)) % 2 === 0 ? C.BG_CREAM : C.TEXT_WARM;
+        finishGfx.fillStyle(stripeColor, 0.85);
+        finishGfx.fillRoundedRect(WORLD.FINISH_X + dx, y, 5, 14, 1);
       }
     }
-    this.add.text(WORLD.FINISH_X - 6, height - 20, 'FINISH', {
-      fontSize: '8px',
+    this.add.text(WORLD.FINISH_X - 6, height - 18, 'FINISH', {
+      fontSize: '10px',
       fontFamily: FONT,
-      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
+      fontStyle: '600',
+      color: '#' + C.TEXT_WARM.toString(16).padStart(6, '0'),
     }).setOrigin(1, 1).setDepth(8);
   }
 
   // ==============================================================
   //  HUD（scrollFactor 0，始终固定在屏幕上）
   // ==============================================================
-  createHUD(viewW) {
-    // --- 计时器（顶部居中） ---
-    const timerBg = this.add.rectangle(viewW / 2, 30, 120, 36, PX.BG_DARK, 0.85)
-      .setScrollFactor(0).setDepth(100);
-    const timerBorder = this.add.graphics().setScrollFactor(0).setDepth(100);
-    drawPixelBorder(timerBorder, viewW / 2 - 62, 12, 124, 36, PX.BG_LIGHT, 1);
+  createHUD(viewW, viewH) {
+    // --- 顶部信息栏 ---
+    const headerY = 28;
+    const headerH = 46;
 
-    this.timerText = this.add.text(viewW / 2, 30, '90', {
-      fontSize: '26px',
-      fontFamily: FONT,
-      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+    const headerGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
+    headerGfx.fillStyle(C.BG_CREAM, 0.85);
+    headerGfx.fillRoundedRect(8, headerY - headerH / 2, viewW - 16, headerH, 10);
+    headerGfx.lineStyle(1, C.ACCENT, 0.3);
+    headerGfx.strokeRoundedRect(8, headerY - headerH / 2, viewW - 16, headerH, 10);
 
-    // --- 排名（右上角） ---
-    this.rankText = this.add.text(viewW - 16, 30, '', {
-      fontSize: '9px',
+    // 计时器（左侧）
+    this.timerText = this.add.text(28, headerY, '90', {
+      fontSize: '22px',
       fontFamily: FONT,
-      color: '#' + PX.HIGHLIGHT.toString(16).padStart(6, '0'),
+      fontStyle: '800',
+      color: '#' + C.TEXT_WARM.toString(16).padStart(6, '0'),
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(101);
+
+    // 排名（右侧）
+    this.rankText = this.add.text(viewW - 28, headerY, '', {
+      fontSize: '14px',
+      fontFamily: FONT,
+      fontStyle: '700',
+      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
     }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(101);
 
-    // --- 迷你进度条（顶部） ---
-    const barY = 62;
-    const barWidth = viewW - 40;
-    const barBg = this.add.rectangle(viewW / 2, barY, barWidth, 4, PX.BG_MID)
-      .setScrollFactor(0).setDepth(100);
-    const barBorder = this.add.graphics().setScrollFactor(0).setDepth(100);
-    drawPixelBorder(barBorder, 18, barY - 4, barWidth + 4, 8, PX.BG_LIGHT, 1);
+    // --- 迷你进度条（header 下方） ---
+    const barY = headerY + headerH / 2 + 8;
+    const barW = viewW - 180;
+    const barX = 80;
+    const barH = 5;
+
+    const barBgGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
+    barBgGfx.fillStyle(C.BG_SAND, 0.6);
+    barBgGfx.fillRoundedRect(barX, barY, barW, barH, 3);
+    barBgGfx.lineStyle(1, C.ACCENT, 0.2);
+    barBgGfx.strokeRoundedRect(barX, barY, barW, barH, 3);
 
     this.progressDots = [];
     for (let i = 0; i < WORLD.TRACK_COUNT; i++) {
-      const dotSize = 8;
-      const dotX = 20 + dotSize;
-      const dotGfx = this.add.graphics().setScrollFactor(0).setDepth(101);
-      dotGfx.fillStyle(PLAYER_COLORS[i].tint, 1);
-      dotGfx.fillRect(dotX - dotSize / 2, barY - dotSize / 2, dotSize, dotSize);
-
-      const dotBorder = this.add.graphics().setScrollFactor(0).setDepth(101);
-      drawPixelBorder(dotBorder, dotX - dotSize / 2 - 1, barY - dotSize / 2 - 1, dotSize + 2, dotSize + 2, 0xffffff, 1);
-
-      this.progressDots.push({ dotGfx, dotBorder, progress: 0, dotSize });
+      const dotX = barX + 4;
+      const dotSize = 7;
+      const dot = this.add.circle(dotX, barY + barH / 2, dotSize, PLAYER_COLORS[i].tint)
+        .setScrollFactor(0).setDepth(101);
+      this.progressDots.push({ dot, dotSize, progress: 0 });
     }
 
-    // --- 道具栏（右下角） ---
-    this.createItemPanel(viewW);
+    // --- 道具面板 ---
+    this.createItemPanel(viewW, viewH);
   }
 
-  // ==============================================================
-  //  道具面板
-  // ==============================================================
-  createItemPanel(viewW) {
-    const { height } = this.scale;
+  createItemPanel(viewW, viewH) {
+    const panelX = viewW - 150;
+    const panelY = viewH - 105;
+    const panelW = 130;
+    const panelH = 85;
 
-    this.add.text(viewW - 90, height - 140, 'ITEM', {
-      fontSize: '8px',
+    const panelGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
+    panelGfx.fillStyle(C.BG_CREAM, 0.85);
+    panelGfx.fillRoundedRect(panelX, panelY, panelW, panelH, 10);
+    panelGfx.lineStyle(1, C.ACCENT, 0.3);
+    panelGfx.strokeRoundedRect(panelX, panelY, panelW, panelH, 10);
+
+    this.add.text(panelX + panelW / 2, panelY + 12, 'ITEMS', {
+      fontSize: '9px',
       fontFamily: FONT,
-      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(100);
+      fontStyle: '600',
+      color: '#' + C.TEXT_MUTED.toString(16).padStart(6, '0'),
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
 
     this.itemSlots = [];
     for (let i = 0; i < 2; i++) {
-      const x = viewW - 55 - i * 80;
-      const y = height - 75;
+      const sx = panelX + 22 + i * 60;
+      const sy = panelY + 48;
 
-      const slot = this.add.rectangle(x, y, 56, 56, PX.BG_MID)
-        .setScrollFactor(0).setDepth(100)
-        .setInteractive({ useHandCursor: true });
+      const slotGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
+      slotGfx.fillStyle(C.BG_SAND, 0.7);
+      slotGfx.fillRoundedRect(sx - 24, sy - 24, 48, 48, 8);
+      slotGfx.lineStyle(1, C.ACCENT, 0.4);
+      slotGfx.strokeRoundedRect(sx - 24, sy - 24, 48, 48, 8);
 
-      const slotBorder = this.add.graphics().setScrollFactor(0).setDepth(100);
-      drawPixelBorder(slotBorder, x - 30, y - 30, 60, 60, PX.PRIMARY, 2);
+      const slotHit = this.add.rectangle(sx, sy, 48, 48, 0x000000, 0)
+        .setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(102);
 
-      const icon = this.add.image(x, y, 'items-strip')
-        .setVisible(false).setScrollFactor(0).setDepth(101);
+      const icon = this.add.image(sx, sy, 'items-strip')
+        .setVisible(false).setScrollFactor(0).setDepth(101).setScale(0.1);
 
-      slot.on('pointerdown', () => this.useItem(i));
+      slotHit.on('pointerdown', () => this.useItem(i));
 
-      this.itemSlots.push({ slot, icon, itemType: null });
+      this.itemSlots.push({ slotGfx, icon, itemType: null, hitArea: slotHit });
     }
   }
 
@@ -270,34 +293,36 @@ export class GameScene extends Phaser.Scene {
     const trackData = this.tracks[data.trackNumber - 1];
     if (!trackData) return;
 
-    // 纹理未就绪时跳过（BootScene 后台加载中）
     if (!this.textures.exists('run-sheet')) return;
 
     const startX = this.progressToWorldX(0);
 
-    // 角色精灵 — 仅在动画就绪时播放
     const sprite = this.add.sprite(startX, trackData.y, 'run-sheet')
-      .setScale(0.6).setDepth(50);
+      .setScale(0.35).setDepth(50);
 
     if (this.anims.exists('run')) {
       sprite.play('run');
     }
 
-    const nameText = this.add.text(startX, trackData.y - 36, data.name || '', {
-      fontSize: '10px',
+    const nameText = this.add.text(startX, trackData.y - 48, data.name || '', {
+      fontSize: '11px',
       fontFamily: FONT_CN,
-      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
-      backgroundColor: '#' + PX.BG_DARK.toString(16).padStart(6, '0') + 'cc',
+      color: '#' + C.TEXT_WARM.toString(16).padStart(6, '0'),
+      backgroundColor: '#' + C.BG_CREAM.toString(16).padStart(6, '0') + 'cc',
       padding: { x: 5, y: 2 },
     }).setOrigin(0.5).setDepth(51);
 
     const color = PLAYER_COLORS[data.trackNumber - 1];
-    sprite.setTint(color.tint);
+
+    // 头顶彩色圆点标识（替代全角色 tint，保留原画细节）
+    const colorDot = this.add.circle(startX, trackData.y - 58, 5, color.tint, 0.9)
+      .setDepth(51).setStrokeStyle(1, 0xffffff, 0.6);
 
     this.players.set(data.socketId, {
       socketId: data.socketId,
       sprite,
       nameText,
+      colorDot,
       trackNumber: data.trackNumber,
       progress: 0,
       speed: 1,
@@ -307,7 +332,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ==============================================================
-  //  姿态切换系统（pose-sheet 5 姿态）
+  //  姿态切换系统
   // ==============================================================
   setPlayerPose(player, poseName) {
     if (!player || player.currentPose === poseName) return;
@@ -338,7 +363,6 @@ export class GameScene extends Phaser.Scene {
   //  延迟加入处理
   // ==============================================================
   handleLateJoin() {
-    // 从 LocalGameEngine 获取已有玩家数据（若游戏已开始）
     const room = window.network.room;
     if (!room || room.status !== 'playing') return;
 
@@ -356,7 +380,6 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // 如果有待答题目，立即显示
     const me = room.players.get(this.mySocketId);
     if (me?.currentChallenge) {
       const ch = me.currentChallenge;
@@ -399,7 +422,6 @@ export class GameScene extends Phaser.Scene {
       player.speed = p.speed;
       player.trackNumber = p.trackNumber;
 
-      // 护盾视觉
       if (p.shielded && !player.shielded) {
         this.setPlayerPose(player, 'shield');
       } else if (!p.shielded && player.shielded) {
@@ -411,29 +433,24 @@ export class GameScene extends Phaser.Scene {
       const dotData = this.progressDots[p.trackNumber - 1];
       if (dotData) {
         dotData.progress = p.progress;
-        const barWidth = this.scale.width - 40;
-        const newX = 20 + (p.progress / 100) * barWidth;
-        const size = dotData.dotSize;
-        dotData.dotGfx.clear();
-        dotData.dotGfx.fillStyle(PLAYER_COLORS[p.trackNumber - 1].tint, 1);
-        dotData.dotGfx.fillRect(newX - size / 2, 62 - size / 2, size, size);
-        dotData.dotBorder.clear();
-        drawPixelBorder(dotData.dotBorder, newX - size / 2 - 1, 62 - size / 2 - 1, size + 2, size + 2, 0xffffff, 1);
+        const barW = this.scale.width - 180;
+        const barX = 80;
+        const newX = barX + (p.progress / 100) * barW;
+        dotData.dot.x = newX;
       }
     });
 
-    // 计算我方排名
     const me = this.players.get(this.mySocketId);
     if (me) {
       this.myTrack = me.trackNumber;
       const sorted = [...this.players.values()].sort((a, b) => b.progress - a.progress);
       const myRank = sorted.findIndex((p) => p.socketId === this.mySocketId) + 1;
-      this.rankText.setText(myRank > 0 ? `RANK ${myRank}/${sorted.length}` : '');
+      this.rankText.setText(myRank > 0 ? `#${myRank}/${sorted.length}` : '');
     }
   }
 
   // ==============================================================
-  //  单词挑战 UI
+  //  单词挑战 UI（圆角治愈风格）
   // ==============================================================
   showWordChallenge(data) {
     this.wordChallenge = data;
@@ -444,14 +461,25 @@ export class GameScene extends Phaser.Scene {
       this.meaningText.setText(data.display);
       this.blankText.setText('???');
     } else {
-      this.meaningText.setText('FILL IN');
+      this.meaningText.setText('填空拼写');
       this.blankText.setText(data.display);
     }
 
+    // 键盘容器入场动画
     this.keyboardContainer.setVisible(true);
+    this.keyboardContainer.setAlpha(0);
+    this.keyboardContainer.y = 30;
+    this.tweens.add({
+      targets: this.keyboardContainer,
+      alpha: 1,
+      y: 0,
+      duration: 300,
+      ease: 'Back.easeOut',
+    });
+
     this.timeLeft = 10;
     this.answerTimerBar.setScale(1, 1);
-    this.answerTimerBar.setFillStyle(PX.PRIMARY);
+    this.answerTimerBar.setFillStyle(C.PRIMARY);
 
     if (this.timerEvent) this.timerEvent.remove();
 
@@ -460,8 +488,11 @@ export class GameScene extends Phaser.Scene {
       callback: () => {
         this.timeLeft--;
         this.answerTimerBar.setScale(this.timeLeft / 10, 1);
+        if (this.timeLeft <= 5) {
+          this.answerTimerBar.setFillStyle(C.HIGHLIGHT);
+        }
         if (this.timeLeft <= 3) {
-          this.answerTimerBar.setFillStyle(PX.ERROR);
+          this.answerTimerBar.setFillStyle(C.ERROR);
         }
         if (this.timeLeft <= 0) {
           this.submitAnswer();
@@ -491,7 +522,7 @@ export class GameScene extends Phaser.Scene {
     if (this.timerEvent) this.timerEvent.remove();
     this.keyboardContainer.setVisible(false);
     this.isPaused = false;
-    this.answerTimerBar.setFillStyle(PX.PRIMARY);
+    this.answerTimerBar.setFillStyle(C.PRIMARY);
 
     window.network.submitAnswer(this.currentInput);
     this.wordChallenge = null;
@@ -504,16 +535,27 @@ export class GameScene extends Phaser.Scene {
     if (data.correct) {
       player.speed = data.newSpeed;
       this.soundGenerator.play('correct');
-      this.tweens.add({
-        targets: player.sprite,
-        alpha: 0.5,
-        duration: 100,
-        yoyo: true,
-        repeat: 2,
+
+      // 治愈粒子爆发
+      burstParticles(this, player.sprite.x, player.sprite.y, C.PRIMARY, 12);
+
+      // 闪绿
+      player.sprite.setTint(0xaaffaa);
+      this.time.delayedCall(250, () => {
+        if (player.sprite?.active) player.sprite.clearTint();
       });
     } else {
       player.speed = data.newSpeed;
       this.soundGenerator.play('wrong');
+
+      // 屏幕微震
+      this.cameras.main.shake(180, 0.004);
+
+      // 闪红
+      player.sprite.setTint(0xff9999);
+      this.time.delayedCall(300, () => {
+        if (player.sprite?.active) player.sprite.clearTint();
+      });
     }
   }
 
@@ -532,6 +574,16 @@ export class GameScene extends Phaser.Scene {
       emptySlot.icon.setFrame(frameName);
     }
     this.soundGenerator.play('item_get');
+
+    // 道具弹入动画
+    emptySlot.icon.setScale(0);
+    this.tweens.add({
+      targets: emptySlot.icon,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 300,
+      ease: 'Back.easeOut',
+    });
   }
 
   useItem(slotIndex) {
@@ -552,15 +604,15 @@ export class GameScene extends Phaser.Scene {
       .sort((a, b) => b.progress - a.progress);
     if (targets.length === 0) return;
 
-    // 瞄准进度最靠前的对手
     const target = targets[0];
     window.network.useItem(itemType, target.trackNumber);
     this.clearItemSlot(slotIndex);
   }
 
   clearItemSlot(index) {
-    this.itemSlots[index].itemType = null;
-    this.itemSlots[index].icon.setVisible(false);
+    const slot = this.itemSlots[index];
+    slot.itemType = null;
+    slot.icon.setVisible(false);
   }
 
   // ==============================================================
@@ -573,16 +625,19 @@ export class GameScene extends Phaser.Scene {
 
     if (data.itemType === 'electric') {
       this.createLightningEffect(from.sprite, to.sprite);
-      // 目标进入 stun 姿态
       this.setPlayerPose(to, 'stun');
       this.soundGenerator.play('electric');
+      this.cameras.main.shake(150, 0.003);
     } else if (data.itemType === 'rocket') {
       this.createRocketEffect(from.sprite);
       this.soundGenerator.play('rocket');
+      // 冲刺闪光
+      burstParticles(this, from.sprite.x - 20, from.sprite.y, C.HIGHLIGHT, 8);
     } else if (data.itemType === 'banana') {
-      // 目标进入 slide 姿态
       this.setPlayerPose(to, 'slide');
       this.soundGenerator.play('banana');
+      // 滑倒粒子
+      burstParticles(this, to.sprite.x, to.sprite.y + 10, C.SUNSET, 6);
     } else if (data.itemType === 'shield') {
       this.createShieldEffect(to.sprite);
       this.setPlayerPose(to, 'shield');
@@ -591,47 +646,55 @@ export class GameScene extends Phaser.Scene {
   }
 
   createLightningEffect(from, to) {
-    const graphics = this.add.graphics().setDepth(55);
-    graphics.lineStyle(4, PX.HIGHLIGHT);
+    // 使用 vfx-strip 电击精灵动画，放置于两个玩家之间
     const midX = (from.x + to.x) / 2;
     const midY = (from.y + to.y) / 2;
-    const jaggedX = midX + (Math.random() - 0.5) * 50;
-    const jaggedY = midY + (Math.random() - 0.5) * 30;
-    graphics.lineBetween(from.x, from.y, jaggedX, jaggedY);
-    graphics.lineBetween(jaggedX, jaggedY, to.x, to.y);
 
-    this.time.delayedCall(200, () => {
-      graphics.clear();
-      this.time.delayedCall(100, () => {
-        graphics.lineStyle(4, PX.HIGHLIGHT);
-        graphics.lineBetween(from.x, from.y, jaggedX, jaggedY);
-        graphics.lineBetween(jaggedX, jaggedY, to.x, to.y);
-        this.time.delayedCall(200, () => graphics.destroy());
-      });
-    });
+    if (this.anims.exists('electric-hit')) {
+      const lightning = this.add.sprite(midX, midY, 'vfx-strip')
+        .setDepth(55).setScale(0.5);
+      lightning.play('electric-hit');
+      lightning.once('animationcomplete', () => lightning.destroy());
+    }
   }
 
   createRocketEffect(sprite) {
-    const particles = this.add.particles(sprite.x - 30, sprite.y, 'items-strip', {
-      frame: 0,
-      speed: { min: 100, max: 300 },
-      scale: { start: 0.5, end: 0 },
-      lifespan: 500,
-      quantity: 2,
-      frequency: 100,
-    }).setDepth(55);
-    this.time.delayedCall(5000, () => particles.destroy());
+    // 火箭火焰粒子（精灵动画 + 粒子混合）
+    const fireGfx = this.add.graphics().setDepth(55);
+    let fireFrame = 0;
+    const fireTimer = this.time.addEvent({
+      delay: 50,
+      callback: () => {
+        if (!fireGfx.active || !sprite.active) { fireTimer.remove(); return; }
+        fireGfx.clear();
+        fireFrame++;
+        const fx = sprite.x - 40;
+        const fy = sprite.y;
+        for (let i = 0; i < 4; i++) {
+          const offset = Math.sin(fireFrame * 0.5 + i) * 5;
+          const size = 3 + (fireFrame % 4);
+          const colors = [0xfff3cd, C.HIGHLIGHT, C.SUNSET, C.ERROR];
+          fireGfx.fillStyle(colors[i], 0.7);
+          fireGfx.fillCircle(fx - i * 10, fy + offset, size);
+        }
+      },
+      repeat: 20,
+    });
+    this.time.delayedCall(1200, () => fireGfx.destroy());
   }
 
   createShieldEffect(sprite) {
-    const shieldAnim = this.add.sprite(sprite.x, sprite.y, 'vfx-strip')
-      .setDepth(55).setScale(1.5);
-    shieldAnim.play('shield-bubble');
-    this.time.delayedCall(800, () => shieldAnim.destroy());
+    // 使用 vfx-strip 护盾精灵动画，覆盖在角色上
+    if (this.anims.exists('shield-bubble')) {
+      const shield = this.add.sprite(sprite.x, sprite.y, 'vfx-strip')
+        .setDepth(55).setScale(0.5);
+      shield.play('shield-bubble');
+      shield.once('animationcomplete', () => shield.destroy());
+    }
   }
 
   // ==============================================================
-  //  虚拟键盘
+  //  虚拟键盘（圆角治愈风）
   // ==============================================================
   createVirtualKeyboard(viewW, viewH) {
     const keys = [
@@ -639,39 +702,43 @@ export class GameScene extends Phaser.Scene {
       ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
       ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
     ];
-    const keySize = 56;
-    const gap = 6;
+    const keySize = 52;
+    const gap = 5;
 
     this.keyboardContainer = this.add.container(0, 0);
     this.keyboardContainer.setVisible(false).setDepth(200).setScrollFactor(0);
 
-    // 深色遮罩
-    const mask = this.add.rectangle(viewW / 2, viewH / 2, viewW, viewH, PX.BG_DARK, 0.92);
+    // 浅色遮罩（不再深棕）
+    const mask = this.add.rectangle(viewW / 2, viewH / 2, viewW, viewH, C.BG_CREAM, 0.93);
     this.keyboardContainer.add(mask);
 
-    // 像素外框
+    // 圆角外框
     const frameGfx = this.add.graphics();
-    drawPixelBorder(frameGfx, 40, viewH * 0.05, viewW - 80, viewH * 0.90, PX.BG_LIGHT, 2);
+    frameGfx.fillStyle(C.BG_CREAM, 0.9);
+    frameGfx.fillRoundedRect(30, viewH * 0.04, viewW - 60, viewH * 0.92, 16);
+    frameGfx.lineStyle(2, C.ACCENT, 0.4);
+    frameGfx.strokeRoundedRect(30, viewH * 0.04, viewW - 60, viewH * 0.92, 16);
     this.keyboardContainer.add(frameGfx);
 
     // 题目区域
-    this.wordChallengeContainer = this.add.container(viewW / 2, viewH * 0.20);
+    this.wordChallengeContainer = this.add.container(viewW / 2, viewH * 0.19);
     this.keyboardContainer.add(this.wordChallengeContainer);
 
     // 中文释义
-    this.meaningText = this.add.text(0, -45, '', {
-      fontSize: '16px',
+    this.meaningText = this.add.text(0, -40, '', {
+      fontSize: '18px',
       fontFamily: FONT_CN,
-      color: '#' + PX.TEXT_MUTED.toString(16).padStart(6, '0'),
+      color: '#' + C.TEXT_WARM.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
     this.wordChallengeContainer.add(this.meaningText);
 
-    // 挖空
-    this.blankText = this.add.text(0, 0, '', {
-      fontSize: '40px',
+    // 挖空/拼写
+    this.blankText = this.add.text(0, 5, '', {
+      fontSize: '42px',
       fontFamily: FONT,
-      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
-      letterSpacing: 10,
+      fontStyle: '800',
+      color: '#' + C.TEXT_DARK.toString(16).padStart(6, '0'),
+      letterSpacing: 8,
     }).setOrigin(0.5);
     this.wordChallengeContainer.add(this.blankText);
 
@@ -679,17 +746,28 @@ export class GameScene extends Phaser.Scene {
     this.inputDisplay = this.add.text(0, 55, '', {
       fontSize: '28px',
       fontFamily: FONT,
-      color: '#' + PX.PRIMARY.toString(16).padStart(6, '0'),
-      letterSpacing: 6,
+      fontStyle: '700',
+      color: '#' + C.PRIMARY.toString(16).padStart(6, '0'),
+      letterSpacing: 4,
     }).setOrigin(0.5);
     this.wordChallengeContainer.add(this.inputDisplay);
 
-    // 倒计时条
-    this.answerTimerBar = this.add.rectangle(0, 115, 280, 6, PX.PRIMARY);
-    const timerBorder = this.add.graphics();
-    drawPixelBorder(timerBorder, -142, 110, 284, 10, PX.BG_LIGHT, 1);
+    // 倒计时条（圆角）
+    const timerY = 105;
+    const timerW = 280;
+    const timerH = 6;
+    const timerBg = this.add.graphics();
+    timerBg.fillStyle(C.BG_SAND, 0.6);
+    timerBg.fillRoundedRect(-timerW / 2, timerY - timerH / 2, timerW, timerH, 3);
+    this.wordChallengeContainer.add(timerBg);
+
+    this.answerTimerBar = this.add.rectangle(0, timerY, timerW, timerH, C.PRIMARY);
+    // 圆角 mask
+    const timerMaskGfx = this.add.graphics();
+    timerMaskGfx.fillStyle(0xffffff);
+    timerMaskGfx.fillRoundedRect(-timerW / 2, timerY - timerH / 2, timerW, timerH, 3);
+    this.answerTimerBar.setMask(timerMaskGfx.createGeometryMask());
     this.wordChallengeContainer.add(this.answerTimerBar);
-    this.wordChallengeContainer.add(timerBorder);
 
     // 键盘行
     const keyStartY = viewH * 0.42;
@@ -698,65 +776,107 @@ export class GameScene extends Phaser.Scene {
       const startX = (viewW - rowWidth) / 2;
 
       row.forEach((key, colIdx) => {
-        const x = startX + colIdx * (keySize + gap) + keySize / 2;
-        const y = keyStartY + rowIdx * (keySize + gap);
+        const kx = startX + colIdx * (keySize + gap);
+        const ky = keyStartY + rowIdx * (keySize + gap);
 
-        const btn = this.add.rectangle(x, y, keySize, keySize, PX.SECONDARY)
-          .setInteractive({ useHandCursor: true });
-        const btnBorder = this.add.graphics();
-        drawPixelBorder(btnBorder, x - keySize/2 - 2, y - keySize/2 - 2, keySize + 4, keySize + 4, PX.BG_LIGHT, 1);
-        const label = this.add.text(x, y, key, {
+        // 圆角按键背景
+        const keyBg = this.add.graphics();
+        keyBg.fillStyle(C.BG_CREAM, 0.9);
+        keyBg.fillRoundedRect(kx, ky, keySize, keySize, 8);
+        keyBg.lineStyle(1, C.ACCENT, 0.35);
+        keyBg.strokeRoundedRect(kx, ky, keySize, keySize, 8);
+
+        const label = this.add.text(kx + keySize / 2, ky + keySize / 2, key, {
           fontSize: '20px',
           fontFamily: FONT,
-          color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
+          fontStyle: '700',
+          color: '#' + C.TEXT_DARK.toString(16).padStart(6, '0'),
         }).setOrigin(0.5);
 
-        btn.on('pointerdown', () => {
+        // 热区
+        const hitArea = this.add.rectangle(kx + keySize / 2, ky + keySize / 2, keySize, keySize, 0x000000, 0)
+          .setInteractive({ useHandCursor: true });
+
+        hitArea.on('pointerdown', () => {
           this.handleKeyInput(key);
-          btn.setFillStyle(PX.PRIMARY);
-          label.setColor('#' + PX.TEXT_DARK.toString(16).padStart(6, '0'));
-          this.time.delayedCall(120, () => {
-            btn.setFillStyle(PX.SECONDARY);
-            label.setColor('#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'));
+          keyBg.clear();
+          keyBg.fillStyle(C.PRIMARY, 0.6);
+          keyBg.fillRoundedRect(kx + 1, ky + 1, keySize - 2, keySize - 2, 7);
+          label.setColor('#ffffff');
+          this.time.delayedCall(150, () => {
+            if (!keyBg.active) return;
+            keyBg.clear();
+            keyBg.fillStyle(C.BG_CREAM, 0.9);
+            keyBg.fillRoundedRect(kx, ky, keySize, keySize, 8);
+            keyBg.lineStyle(1, C.ACCENT, 0.35);
+            keyBg.strokeRoundedRect(kx, ky, keySize, keySize, 8);
+            label.setColor('#' + C.TEXT_DARK.toString(16).padStart(6, '0'));
           });
         });
-        btn.on('pointerover', () => btn.setFillStyle(PX.HIGHLIGHT));
-        btn.on('pointerout', () => btn.setFillStyle(PX.SECONDARY));
 
-        this.keyboardContainer.add([btnBorder, btn, label]);
+        hitArea.on('pointerover', () => {
+          keyBg.clear();
+          keyBg.fillStyle(C.ACCENT, 0.5);
+          keyBg.fillRoundedRect(kx - 1, ky - 1, keySize + 2, keySize + 2, 9);
+        });
+
+        hitArea.on('pointerout', () => {
+          keyBg.clear();
+          keyBg.fillStyle(C.BG_CREAM, 0.9);
+          keyBg.fillRoundedRect(kx, ky, keySize, keySize, 8);
+          keyBg.lineStyle(1, C.ACCENT, 0.35);
+          keyBg.strokeRoundedRect(kx, ky, keySize, keySize, 8);
+        });
+
+        this.keyboardContainer.add([keyBg, label, hitArea]);
       });
     });
 
     // 控制键
-    const ctrlY = keyStartY + 3 * (keySize + gap) + 10;
+    const ctrlY = keyStartY + 3 * (keySize + gap) + 8;
 
-    const bsW = 90;
-    const bsX = viewW / 2 - 110;
-    const bsBtn = this.add.rectangle(bsX, ctrlY, bsW, keySize, PX.ERROR)
-      .setInteractive({ useHandCursor: true });
-    const bsBorder = this.add.graphics();
-    drawPixelBorder(bsBorder, bsX - bsW/2 - 2, ctrlY - keySize/2 - 2, bsW + 4, keySize + 4, 0xb0443a, 1);
-    const bsLabel = this.add.text(bsX, ctrlY, 'DEL', {
-      fontSize: '12px',
+    // DEL 键
+    const delW = 90;
+    const delX = viewW / 2 - 110;
+    const delBg = this.add.graphics();
+    delBg.fillStyle(C.ERROR, 0.12);
+    delBg.fillRoundedRect(delX - delW / 2, ctrlY - keySize / 2, delW, keySize, 8);
+    const delLabel = this.add.text(delX, ctrlY, 'DEL', {
+      fontSize: '14px',
       fontFamily: FONT,
-      color: '#' + PX.TEXT_LIGHT.toString(16).padStart(6, '0'),
+      fontStyle: '700',
+      color: '#' + C.ERROR.toString(16).padStart(6, '0'),
     }).setOrigin(0.5);
-    bsBtn.on('pointerdown', () => this.handleBackspace());
-    this.keyboardContainer.add([bsBorder, bsBtn, bsLabel]);
+    const delHit = this.add.rectangle(delX, ctrlY, delW, keySize, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    delHit.on('pointerdown', () => this.handleBackspace());
+    this.keyboardContainer.add([delBg, delLabel, delHit]);
 
-    const subW = 160;
-    const subX = viewW / 2 + 50;
-    const subBtn = this.add.rectangle(subX, ctrlY, subW, keySize, PX.PRIMARY)
-      .setInteractive({ useHandCursor: true });
-    const subBorder = this.add.graphics();
-    drawPixelBorder(subBorder, subX - subW/2 - 2, ctrlY - keySize/2 - 2, subW + 4, keySize + 4, 0x5a9e38, 1);
-    const subLabel = this.add.text(subX, ctrlY, 'ENTER', {
-      fontSize: '12px',
-      fontFamily: FONT,
-      color: '#' + PX.TEXT_DARK.toString(16).padStart(6, '0'),
+    // ENTER 键
+    const enterW = 150;
+    const enterX = viewW / 2 + 40;
+    const enterBg = this.add.graphics();
+    enterBg.fillStyle(C.PRIMARY, 0.8);
+    enterBg.fillRoundedRect(enterX - enterW / 2, ctrlY - keySize / 2, enterW, keySize, 8);
+    const enterLabel = this.add.text(enterX, ctrlY, '确 定', {
+      fontSize: '16px',
+      fontFamily: FONT_CN,
+      color: '#ffffff',
     }).setOrigin(0.5);
-    subBtn.on('pointerdown', () => this.submitAnswer());
-    this.keyboardContainer.add([subBorder, subBtn, subLabel]);
+    const enterHit = this.add.rectangle(enterX, ctrlY, enterW, keySize, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    enterHit.on('pointerdown', () => this.submitAnswer());
+    enterHit.on('pointerover', () => {
+      enterBg.clear();
+      enterBg.fillStyle(0x7fb069, 0.9);
+      enterBg.fillRoundedRect(enterX - enterW / 2 - 1, ctrlY - keySize / 2 - 1, enterW + 2, keySize + 2, 9);
+    });
+    enterHit.on('pointerout', () => {
+      enterBg.clear();
+      enterBg.fillStyle(C.PRIMARY, 0.8);
+      enterBg.fillRoundedRect(enterX - enterW / 2, ctrlY - keySize / 2, enterW, keySize, 8);
+    });
+    this.keyboardContainer.add([enterBg, enterLabel, enterHit]);
   }
 
   setupPhysicalKeyboard() {
@@ -779,8 +899,8 @@ export class GameScene extends Phaser.Scene {
     const me = this.players.get(this.mySocketId);
     if (!me) return;
 
-    // Camera 平滑跟随玩家
-    const targetCamX = me.sprite.x - this.scale.width * 0.35;
+    // Camera 平滑跟随
+    const targetCamX = me.sprite.x - this.scale.width * 0.4;
     this.cameras.main.scrollX = lerp(
       this.cameras.main.scrollX,
       clamp(targetCamX, 0, WORLD.WIDTH - this.scale.width),
@@ -792,7 +912,28 @@ export class GameScene extends Phaser.Scene {
       const targetX = this.progressToWorldX(player.progress);
       player.sprite.x = lerp(player.sprite.x, targetX, 0.1);
       player.nameText.x = player.sprite.x;
+      if (player.colorDot) player.colorDot.x = player.sprite.x;
     });
+
+    // 速度线（高速度时）
+    if (me.speed >= 3) {
+      this._speedLineTimer += 50;
+      if (this._speedLineTimer >= 60) {
+        this._speedLineTimer = 0;
+        this._drawSpeedLines(me);
+      }
+    }
+  }
+
+  _drawSpeedLines(player) {
+    const gfx = this.add.graphics().setDepth(49);
+    for (let i = 0; i < 3; i++) {
+      const lx = player.sprite.x - 30 - Math.random() * 20;
+      const ly = player.sprite.y - 10 + Math.random() * 20;
+      gfx.fillStyle(C.HIGHLIGHT, 0.35);
+      gfx.fillRoundedRect(lx, ly, 8 + Math.random() * 12, 2, 1);
+    }
+    this.time.delayedCall(200, () => gfx.destroy());
   }
 
   shutdown() {

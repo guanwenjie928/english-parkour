@@ -1,5 +1,6 @@
-// 8-bit 音效合成器 — Web Audio API 零文件依赖
+// 治愈风格音效合成器 — Web Audio API 零文件依赖
 // 惰性单例 + 数据驱动合成，所有音效用纯配置定义
+// 吉卜力化：正弦波(sine) + 三角波(triangle) 替代 方波(square) + 锯齿波(sawtooth)
 
 class SoundGenerator {
   static #instance = null;
@@ -12,27 +13,26 @@ class SoundGenerator {
     return this.#instance ??= new SoundGenerator();
   }
 
-  // 音效定义表 — 纯数据，无命令式代码
+  // 音效定义表 — 治愈柔化波形
   #definitions = Object.freeze({
-    correct:   { osc: 'square', notes: ['C5','E5','G5'], dur: 0.15, gap: 0.08, gain: 0.25, type: 'arpeggio' },
-    wrong:     { osc: 'sawtooth', notes: ['C4','G3'], dur: 0.3, gap: 0, gain: 0.2, type: 'slide', filterFreq: 800 },
-    item_get:  { osc: 'sine', notes: ['C5','C6'], dur: 0.12, gap: 0.06, gain: 0.2, type: 'jump' },
-    rocket:    { osc: 'sawtooth', notes: ['G2','G3','G4'], dur: 0.3, gap: 0.05, gain: 0.15, type: 'sweep', sweepStart: 200, sweepEnd: 800 },
-    electric:  { osc: 'square', notes: ['C5'], dur: 0.1, gap: 0.08, gain: 0.18, type: 'noise_burst', bursts: 3 },
-    banana:    { osc: 'triangle', notes: ['E4','C3'], dur: 0.35, gap: 0, gain: 0.2, type: 'slide', vibrato: 8 },
-    shield:    { osc: 'sine', notes: ['G3','C5'], dur: 0.2, gap: 0.04, gain: 0.18, type: 'sweep', sweepStart: 200, sweepEnd: 1200 },
-    countdown: { osc: 'square', notes: ['C4'], dur: 0.12, gap: 0, gain: 0.3, type: 'perc', percFreq: 80 },
-    victory:   { osc: 'square', notes: ['C4','E4','G4','C5'], dur: 0.22, gap: 0.1, gain: 0.22, type: 'arpeggio' },
-    click:     { osc: 'sine', notes: ['C6'], dur: 0.02, gap: 0, gain: 0.15, type: 'staccato' },
-    heartbeat: { osc: 'sine', notes: ['C2'], dur: 0.08, gap: 0.15, gain: 0.3, type: 'double_pulse', pulseGap: 0.12 },
-    go:        { osc: 'square', notes: ['C5','E5','G5','C6'], dur: 0.1, gap: 0.05, gain: 0.25, type: 'arpeggio' },
+    correct:   { osc: 'sine', notes: ['C5','E5','G5'], dur: 0.18, gap: 0.06, gain: 0.2, type: 'arpeggio' },
+    wrong:     { osc: 'triangle', notes: ['C4','G3'], dur: 0.35, gap: 0, gain: 0.15, type: 'slide', filterFreq: 400 },
+    item_get:  { osc: 'sine', notes: ['C5','C6'], dur: 0.14, gap: 0.05, gain: 0.18, type: 'jump' },
+    rocket:    { osc: 'triangle', notes: ['G2','G3','G4'], dur: 0.3, gap: 0.05, gain: 0.12, type: 'sweep', sweepStart: 200, sweepEnd: 800 },
+    electric:  { osc: 'sine', notes: ['C5'], dur: 0.08, gap: 0.06, gain: 0.12, type: 'noise_burst', bursts: 3 },
+    banana:    { osc: 'triangle', notes: ['E4','C3'], dur: 0.35, gap: 0, gain: 0.15, type: 'slide', vibrato: 8 },
+    shield:    { osc: 'sine', notes: ['G3','C5'], dur: 0.2, gap: 0.04, gain: 0.15, type: 'sweep', sweepStart: 200, sweepEnd: 1200 },
+    countdown: { osc: 'sine', notes: ['C4'], dur: 0.12, gap: 0, gain: 0.22, type: 'perc', percFreq: 60 },
+    victory:   { osc: 'sine', notes: ['C4','E4','G4','C5'], dur: 0.25, gap: 0.08, gain: 0.2, type: 'arpeggio' },
+    click:     { osc: 'sine', notes: ['C6'], dur: 0.02, gap: 0, gain: 0.1, type: 'staccato' },
+    go:        { osc: 'sine', notes: ['C5','E5','G5','C6'], dur: 0.1, gap: 0.05, gain: 0.2, type: 'arpeggio' },
   });
 
-  // BGM 定义
+  // BGM 定义（均降 gain 0.02，波形改为 sine）
   #bgmDefs = Object.freeze({
-    menu: { bpm: 100, pattern: ['C4','E4','G4','C5','G4','E4'], osc: 'square', gain: 0.08, noteLen: 0.4 },
-    game: { bpm: 140, pattern: ['C4','C4','G4','G4','A4','A4','G4','F4','F4','E4','E4','D4','D4','C4'], osc: 'square', gain: 0.06, noteLen: 0.15 },
-    final: { bpm: 90, pattern: ['C4','E4','G4','C5','E5','C5','G4','E4','C4','D4','F4','A4','D5','A4','F4','D4'], osc: 'triangle', gain: 0.07, noteLen: 0.3 },
+    menu:  { bpm: 100, pattern: ['C4','E4','G4','C5','G4','E4'], osc: 'sine', gain: 0.05, noteLen: 0.4 },
+    game:  { bpm: 140, pattern: ['C4','C4','G4','G4','A4','A4','G4','F4','F4','E4','E4','D4','D4','C4'], osc: 'sine', gain: 0.04, noteLen: 0.15 },
+    final: { bpm: 90,  pattern: ['C4','E4','G4','C5','E5','C5','G4','E4','C4','D4','F4','A4','D5','A4','F4','D4'], osc: 'sine', gain: 0.05, noteLen: 0.3 },
   });
 
   // 确保 AudioContext 已初始化（用户手势后调用）
