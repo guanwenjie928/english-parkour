@@ -1,0 +1,40 @@
+# 依赖
+node_modules/
+.pnp
+.pnp.js
+
+# 构建产物
+dist/
+build/
+*.tsbuildinfo
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*
+
+# 素材缓存
+client/public/assets/.cache/
+
+# 测试
+coverage/
+.nyc_output/
+
+# 临时文件
+*.tmp
+*.temp
