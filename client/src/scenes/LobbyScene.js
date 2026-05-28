@@ -11,6 +11,7 @@ export class LobbyScene extends Phaser.Scene {
     this.roomCode = data.code || '000000';
     this.playerName = data.name || '匿名';
     this.isTeacher = data.isTeacher || false;
+    this.isLocal = data.isLocal || this.roomCode === 'SOLO';
     this.players = new Map();
   }
 
@@ -66,8 +67,26 @@ export class LobbyScene extends Phaser.Scene {
     // 注册网络事件
     this.setupNetworkListeners();
 
-    // 请求当前玩家列表
-    window.network.requestPlayerList();
+    // 本地模式：直接显示玩家列表（AI 已加入）
+    if (this.isLocal) {
+      setTimeout(() => {
+        window.network.requestPlayerList();
+      }, 100);
+    } else {
+      window.network.requestPlayerList();
+    }
+
+    // 单人模式提示
+    if (this.isLocal) {
+      this.add.text(width / 2, height * 0.38, '与 4 个 AI 对手一起练习！', {
+        fontSize: '20px',
+        color: '#44dd44',
+      }).setOrigin(0.5);
+
+      // SOLO 模式隐藏房间码，显示练习模式
+      this.roomCodeText.setText('练习模式');
+      this.roomCodeText.setFontSize('48px');
+    }
   }
 
   createPlayerList() {

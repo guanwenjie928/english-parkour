@@ -9,6 +9,7 @@ import { ConnectionManager } from './utils/ConnectionManager.js';
 import { MessageQueue } from './utils/MessageQueue.js';
 import { OfflineDetector } from './utils/OfflineDetector.js';
 import { SoundGenerator } from './utils/SoundGenerator.js';
+import { LocalGameEngine } from './engine/LocalGameEngine.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -190,12 +191,26 @@ class NetworkManager {
   }
 }
 
-window.network = new NetworkManager();
+// === 本地模式检测 ===
+const isLocalMode = typeof io === 'undefined' || typeof io !== 'function' || location.search.includes('local=1');
 
-// 多标签页冲突检测
-const TAB_CHANNEL = new BroadcastChannel('english_parkour');
+if (isLocalMode) {
+  window.network = new LocalGameEngine();
+  console.log('[LocalGameEngine] 本地模式已启动');
+} else {
+  window.network = new NetworkManager();
+  console.log('[NetworkManager] 联网模式已启动');
+}
+
+// 多标签页冲突检测（联网模式才启用）
+const TAB_CHANNEL = isLocalMode ? null : new BroadcastChannel('english_parkour');
 
 window.checkDuplicateSession = () => {
+  // 本地模式跳过检测
+  if (isLocalMode) {
+    return Promise.resolve({ duplicate: false, sessionId: 'local' });
+  }
+
   // 兼容不支持 crypto.randomUUID 的浏览器
   const genId = () => {
     if (typeof crypto.randomUUID === 'function') {

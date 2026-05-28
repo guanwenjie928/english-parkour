@@ -28,6 +28,11 @@ export class BootScene extends Phaser.Scene {
     // === 障碍物 ===
     this.load.image('obstacles-strip', 'assets/obstacles/obstacles-strip.jpg');
 
+    // === 菜单素材 ===
+    this.load.image('menu-bg', 'assets/ui/menu-bg.jpg');
+    this.load.image('menu-logo', 'assets/ui/menu-logo.png');
+    this.load.image('menu-character', 'assets/ui/menu-character.png');
+
     // 音效: 全部由 SoundGenerator 程序化合成，零 mp3 文件
     // SoundGenerator.get() 惰性初始化，首次 play() 时自动创建 AudioContext
   }

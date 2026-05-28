@@ -12,7 +12,15 @@
 </head>
 <body>
   <div id="game-container"></div>
-  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // 本地模式不加载 socket.io（纯单机体验）
+    const isLocalMode = location.search.includes('local=1') || location.hostname === 'localhost';
+    if (!isLocalMode) {
+      const script = document.createElement('script');
+      script.src = '/socket.io/socket.io.js';
+      document.head.appendChild(script);
+    }
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
