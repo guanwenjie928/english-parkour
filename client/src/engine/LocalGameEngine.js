@@ -244,6 +244,9 @@ class LocalGameEngine {
       this.emit('answer_result', { correct: false, newSpeed: player.speed });
     }
 
+    // 清除当前题目，允许发送下一题
+    player.currentChallenge = null;
+
     // 延迟发新题
     setTimeout(() => this._sendNewChallenge(player), 2000);
 
@@ -371,15 +374,20 @@ class LocalGameEngine {
     // 发射 game_start 事件（LobbyScene 依赖此事件跳转到 GameScene）
     this.emit('game_start', {});
 
-    // 给所有人发第一题
-    this.room.players.forEach((player) => {
-      if (player.isHuman) {
-        this._sendNewChallenge(player);
-      } else {
-        // AI 自动答题
-        this._dispatchToAI('game_start', {});
-      }
-    });
+    // ⚠️ 延迟首题发送 500ms：
+    // GameScene 的创建是异步的（Phaser scene.start 下一帧才执行 create），
+    // 如果同步发射 word_challenge，GameScene 还没注册监听器，事件会丢失，
+    // 导致玩家永远看不到拼写 UI，整个机制卡死。
+    setTimeout(() => {
+      this.room.players.forEach((player) => {
+        if (player.isHuman) {
+          this._sendNewChallenge(player);
+        } else {
+          // AI 自动答题
+          this._dispatchToAI('game_start', {});
+        }
+      });
+    }, 500);
 
     // 启动 tick
     this.room.tickTimer = setInterval(this._tick, 50);
@@ -436,6 +444,10 @@ class LocalGameEngine {
   }
 
   _sendNewChallenge(player) {
+    // 防止覆盖已有活跃题目（答题后 2s 才发下一题，
+    // 期间如果有其他事件误触发也不会覆盖）
+    if (player.currentChallenge) return;
+
     const word = this.wordBank.selectWord(this.room.id, { difficulty: 2 });
     if (!word) return;
 
