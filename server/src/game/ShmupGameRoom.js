@@ -341,12 +341,11 @@ class ShmupGameRoom {
 
   // === 单词选择 ===
   _pickWord() {
-    if (!this.wordEngine) {
-      // 无 wordEngine 时用简单回退
+    // wordEngine 未注入或未加载词库时，使用内置 fallback
+    if (!this.wordEngine || !this.wordEngine.loaded) {
       const fallback = ['apple', 'banana', 'cat', 'dog', 'egg', 'fish', 'girl', 'house', 'ice', 'jump'];
       const w = fallback[Math.floor(Math.random() * fallback.length)];
-      const idx = this._enemyIdSeq;
-      return { word: w, meaning: `单词${idx}` };
+      return { word: w, meaning: `单词${this._enemyIdSeq}` };
     }
     if (this._wordPool.length === 0) this._initWordPool();
     for (let i = 0; i < this._wordPool.length; i++) {
@@ -363,7 +362,7 @@ class ShmupGameRoom {
   }
 
   _initWordPool() {
-    if (this.wordEngine) {
+    if (this.wordEngine && this.wordEngine.loaded) {
       this._wordPool = [...this.wordEngine.byId.values()];
     } else {
       const fallback = [
